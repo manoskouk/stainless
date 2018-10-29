@@ -205,7 +205,7 @@ class RegistryTestSuite extends FunSuite {
       val analysis = MockAnalysis(report)
       Future.successful(analysis)
     }
-
+    Nil.toSeq
     private val reports = ListBuffer[Report]()
 
     def popReport(): Report = {

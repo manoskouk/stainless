@@ -475,9 +475,8 @@ trait ASTExtractors {
 
     object ExMainFunctionDef {
       def unapply(dd: DefDef): Boolean = dd match {
-        case DefDef(_, name, tparams, vparamss, tpt, rhs) if name.toString == "main" && tparams.isEmpty && vparamss.size == 1 && vparamss.head.size == 1 => {
+        case DefDef(_, name, tparams, vparamss, tpt, rhs) if name.toString == "main" && tparams.isEmpty && vparamss.size == 1 && vparamss.head.size == 1 =>
           true
-        }
         case _ => false
       }
     }
@@ -491,7 +490,7 @@ trait ASTExtractors {
             dd.symbol.isSynthetic &&
             dd.symbol.isImplicit &&
             dd.symbol.isMethod &&
-            !(getAnnotations(tpt.symbol) contains "ignore")
+            !(getAnnotations(tpt.symbol) exists (_._2 == "ignore"))
           ) ||
             !dd.symbol.isSynthetic ||
             canExtractSynthetic(dd.symbol)
@@ -808,7 +807,7 @@ trait ASTExtractors {
 
     object ExTupleExtract {
       def unapply(tree: Select) : Option[(Tree,Int)] = tree match {
-        case Select(lhs, n) => {
+        case Select(lhs, n) =>
           val methodName = n.toString
           if(methodName.head == '_') {
             val indexString = methodName.tail
@@ -822,7 +821,6 @@ trait ASTExtractors {
                 None
             }
           } else None
-        }
         case _ => None
       }
     }
