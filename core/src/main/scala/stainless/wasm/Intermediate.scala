@@ -1,4 +1,4 @@
-package stainless
+/*package stainless
 package wasm
 
 object Intermediate {
@@ -399,3 +399,4 @@ object Translator {
   }
 
 }
+*/
