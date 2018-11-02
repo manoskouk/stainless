@@ -7,7 +7,7 @@ import inox.ast.Identifier
 trait Expressions extends stainless.ast.Expressions { self: Trees =>
   sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr {
     def getType(implicit s: Symbols): Type = {
-      checkParamTypes(fields, tpe.flattenFields, tpe)
+      checkParamTypes(fields, tpe.sort.flattenFields, tpe)
     }
   }
 

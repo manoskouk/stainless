@@ -12,60 +12,59 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     * Implementation is left abstract:
     *   it can be implemented either in linear memory, or the heap when this is available
     */
-  trait RecordDef extends ADTSort {
-    def allFields(implicit s: Symbols): Seq[ValDef]
-    val parent: Option[Identifier]
-    def lookupParent(implicit s: Symbols): Option[RecordDef] = {
-      parent.map(p => s.lookupSort(p).asInstanceOf[RecordDef])
+  class RecordSort(
+    id: Identifier,
+    tparams: Seq[TypeParameterDef],
+    parent: Option[Identifier],
+    fields: Seq[ValDef]
+  ) extends ADTSort(
+    id,
+    tparams,
+    Seq(new ADTConstructor(id, id, parent.toSeq.map(par => ValDef(par, ADTType(par, tparams map (_.tp)))) ++ fields)),
+    Seq()
+  ) {
+    def lookupParent(implicit s: Symbols): Option[RecordSort] = {
+      parent.map(p => s.lookupSort(p).asInstanceOf[RecordSort])
     }
-    def conformsWith(ancestor: Identifier): Boolean =
-      this == ancestor || (parent contains ancestor)
+    def flattenFields: Seq[ValDef] = {
+      lookupParent.toSeq.flatMap(_.flattenFields) ++ fields
+    }
+    def ancestors(implicit s: Symbols): Seq[Identifier] = {
+      id +: lookupParent.toSeq.flatMap(_.ancestors)
+    }
+    def conformsWith(ancestor: Identifier): Boolean = ancestors.contains(ancestor)
   }
-  //
-  //sealed class RecordDef(
-  //  id: Identifier,
-  //  tparams: Seq[TypeParameterDef],
-  //  parent: Option[Identifier],
-  //  fields: Seq[ValDef]
-  //) extends ADTSort(
-  //  id,
-  //  tparams,
-  //  Seq(new ADTConstructor(id, id, parent.toSeq.map(par => ValDef(par, ADTType(par, tparams map (_.tp)))) ++ fields)),
-  //  Seq()
-  //) {
-  //  def lookupParent(implicit s: Symbols): Option[RecordDef] = {
-  //    parent.map(p => s.lookupSort(p).asInstanceOf[RecordDef])
-  //  }
-  //  def flattenFields: Seq[ValDef] = {
-  //    lookupParent.toSeq.flatMap(_.flattenFields) ++ fields
-  //  }
-  //  def ancestors(implicit s: Symbols): Seq[Identifier] = {
-  //    id +: lookupParent.toSeq.flatMap(_.ancestors)
-  //  }
-  //  def conformsWith(ancestor: Identifier): Boolean = ancestors.contains(ancestor)
-  //}
 
   def mkSingletonConstr(id: Identifier, tp: Type) = {
     new ADTConstructor(id, id, Seq(ValDef(id, tp)))
   }
 
-  sealed class FunPointerSort(ft: FunctionType) extends ADTSort(
-    FreshIdentifier(ft.asString),
-    Seq(),
-    Seq(mkSingletonConstr(FreshIdentifier("fp"), ft)),
-    Seq()
-  ) with RecordDef {
-    val parent = None
-    def allFields(implicit s: Symbols) = constructors.head.fields
-  }
+  private val funPointerId = FreshIdentifier("funP")
+  import scala.collection.mutable.{Map => MMap}
+  private val funSortIds = MMap[FunctionType, Identifier]()
+  private val adtCodeID = FreshIdentifier("code")
 
-  sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])(implicit s: Symbols)
-    extends ADTSort(
-      FreshIdentifier("closure"),
+  sealed class FunPointerSort(ft: FunctionType)
+    extends RecordSort(
+      funSortIds.getOrElseUpdate(ft, FreshIdentifier(ft.asString)),
       Seq(),
-      Seq(new ADTConstructor(parent))
+      None,
+      Seq(ValDef(funPointerId, ft))
+    )
 
-    ) {
+  sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])
+    extends RecordSort(FreshIdentifier("closure"), Seq(), Some(parent), env)
 
+  sealed class RecordADTSort private (id: Identifier, tparams: Seq[TypeParameterDef])
+    extends RecordSort(id, tparams, None, Seq(ValDef(adtCodeID, BVType(signed = false, 8)) ))
+
+  object RecordADTSort {
+    def apply(id: Identifier)(implicit s: Symbols) = {
+      val adt = s.lookupSort(id).get
+      new RecordADTSort(id.freshen, adt.tparams)
+    }
   }
+
+  class ConstructorSort(id: Identifier, parent: Identifier, tparams: Seq[TypeParameterDef], fields: Seq[ValDef])
+    extends RecordSort(id, tparams, Some(parent), fields)
 }
