@@ -40,11 +40,35 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
       (_, _, es, _, _) => t.Output(es.head)
     )
 
-    case s.ArrayConcat(e1, e2) => (
+    case s.Sequence(e1, e2) => (
       NoIdentifiers, NoVariables, Seq(e1, e2), NoTypes, NoFlags,
-      (_, _, es, _, _) => t.ArrayConcat(es(0), es(1))
+      (_, _, es, _, _) => t.Sequence(es(0), es(1))
     )
 
+    case s.NewArray(length, init) => (
+      NoIdentifiers, NoVariables, Seq(length, init), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.NewArray(es(0), es(1))
+    )
+
+    case s.ArrayGet(array, index) => (
+      NoIdentifiers, NoVariables, Seq(array, index), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.ArrayGet(es(0), es(1))
+    )
+
+    case s.ArraySet(array, index, value) => (
+      NoIdentifiers, NoVariables, Seq(array, index, value), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.ArraySet(es(0), es(1), es(2))
+    )
+
+    case s.ArrayLength(array) => (
+      NoIdentifiers, NoVariables, Seq(array), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.ArrayLength(es.head)
+    )
+
+    case s.ArrayCopy(from, to, start) => (
+      NoIdentifiers, NoVariables, Seq(from, to, start), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.ArrayCopy(es(0), es(1), es(2))
+    )
     case _ => super.deconstruct(expr)
   }
 

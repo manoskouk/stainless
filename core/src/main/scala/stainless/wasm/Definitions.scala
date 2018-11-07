@@ -17,6 +17,8 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
 
     def lookupRecord(id: Identifier, tps: Seq[Type]): Option[TypedRecordSort] = lookupRecord(id).map(_.typed(tps))
     def getRecord(id: Identifier, tps: Seq[Type]): TypedRecordSort = getRecord(id).typed(tps)
+
+    def childrenOf(id: Identifier) = records.collect{ case (_, cs:ConstructorSort) if cs.parent == id => cs }
   }
 
   /** A record type represents a sequence of named fields in memory.
@@ -28,8 +30,8 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   class RecordSort(
     val id: Identifier,
     val tparams: Seq[TypeParameterDef],
-    parent: Option[Identifier],
-    fields: Seq[ValDef]
+    val parent: Option[Identifier],
+    val fields: Seq[ValDef]
   ) extends Definition {
     assert(parent.isEmpty || tparams.isEmpty)
 
@@ -71,10 +73,10 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
       definition.ancestors
   }
 
-  private val funPointerId = FreshIdentifier("funP")
+  private[wasm] val funPointerId = FreshIdentifier("funP")
   import scala.collection.mutable.{Map => MMap}
-  private val funSortIds = MMap[FunctionType, Identifier]()
-  private val adtCodeID = FreshIdentifier("code")
+  private[wasm] val funSortIds = MMap[FunctionType, Identifier]()
+  private[wasm] val adtCodeID = FreshIdentifier("code")
 
   sealed class FunPointerSort(ft: FunctionType)
     extends RecordSort(
@@ -88,9 +90,14 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     extends RecordSort(FreshIdentifier("closure"), Seq(), Some(parent), env)
 
   sealed class RecordADTSort(id: Identifier, tparams: Seq[TypeParameterDef])
-    extends RecordSort(id, tparams, None, Seq(ValDef(adtCodeID, BVType(signed = false, 8)) ))
+    extends RecordSort(id, tparams, None, Seq(ValDef(adtCodeID, BVType(signed = false, 32)) )) // TODO: Fix type
 
-  sealed class ConstructorSort(id: Identifier, parent: Identifier, tparams: Seq[TypeParameterDef], fields: Seq[ValDef])
-    extends RecordSort(id, tparams, Some(parent), fields)
+  sealed class ConstructorSort(
+    id: Identifier,
+    parent: Identifier,
+    val code: Int,
+    tparams: Seq[TypeParameterDef],
+    fields: Seq[ValDef]
+  ) extends RecordSort(id, tparams, Some(parent), fields)
 
 }

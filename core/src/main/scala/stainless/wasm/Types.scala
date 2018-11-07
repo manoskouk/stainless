@@ -7,6 +7,8 @@ trait Types extends inox.ast.Types { self: Trees =>
     def lookupRecord(implicit s: Symbols): Option[TypedRecordSort] = s.lookupRecord(record, tps)
 
     def getRecord(implicit s: Symbols): TypedRecordSort = s.getRecord(record, tps)
+  
+    def parent(implicit s: Symbols): Option[RecordType] = ??? // TODO
 
     def conformsWith(superType: Type)(implicit s: Symbols): Boolean = superType match {
       case RecordType(record2, tps2) =>

@@ -54,12 +54,39 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     def getType(implicit s: Symbols) = e2.getType
   }
 
-  sealed case class NewArray(length: Expr, elem: Expr) extends Expr {
+  sealed case class NewArray(length: Expr, init: Expr) extends Expr {
     def getType(implicit s: Symbols) =
-      if (length.getType == Int32Type)
-        unveilUntyped(ArrayType(elem.getType))
+      if (length.getType == Int32Type())
+        unveilUntyped(ArrayType(init.getType))
       else Untyped
   }
 
-  sealed case class ArrayGet(array: Expr, index: Expr)
+  sealed case class ArrayGet(array: Expr, index: Expr) extends Expr {
+    def getType(implicit s: Symbols) = (array.getType, index.getType) match {
+      case (ArrayType(base), Int32Type()) => base
+      case _ => Untyped
+    }
+  }
+  
+  sealed case class ArraySet(array: Expr, index: Expr, value: Expr) extends Expr {
+    def getType(implicit s: Symbols) = (array.getType, index.getType, value.getType) match {
+      case (ArrayType(base1), Int32Type(), base2) if base1 == base2 => UnitType()
+      case _ => Untyped
+    }
+  }
+
+  sealed case class ArrayLength32(array: Expr) extends Expr {
+    def getType(implicit s: Symbols) = array.getType match {
+      case ArrayType(_) => Int32Type()
+      case _ => Untyped
+    }
+  }
+
+  sealed case class ArrayCopy(from: Expr, to: Expr, startIndex: Expr) extends Expr {
+    def getType(implicit s: Symbols) = (from.getType, to.getType, startIndex.getType) match {
+      case (ArrayType(base1), ArrayType(base2), Int32Type()) if base1 == base2 => UnitType()
+      case _ => Untyped
+    }
+  }
+ 
 }
