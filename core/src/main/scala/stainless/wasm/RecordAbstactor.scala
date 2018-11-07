@@ -36,7 +36,7 @@ trait RecordAbstactor extends inox.transformers.SymbolTransformer with Definitio
         transform(body, env)
       case s.Error(tpe, description) => 
         Sequence(Output(transform(s.StringLiteral(description), env)), NoTree(transform(tpe, env)))
-      case me: s.MatchExpr => transform(sym0.matchToIfThenElse(me), env)
+      case me: s.MatchExpr => sym.matchToIfThenElse(transform(me, env))
       case s.Equals(lhs, rhs) => ???
      
       // Contracts
@@ -69,7 +69,15 @@ trait RecordAbstactor extends inox.transformers.SymbolTransformer with Definitio
         else transform(body, env)
 
       // Higher-order
-      case s.Application(callee, args) => ???
+      case s.Application(callee, args) => 
+        val tCallee = transform(callee, env)
+        val vCallee = Variable.fresh("fun", tCallee.getType)
+        Let(vCallee.toVal, tCallee,
+          Application(
+            RecordSelector(vCallee, funPointerId),
+            CastUp(vCallee, ???) +: args.map(transform(_, env))
+          )
+        )
       case s.Lambda(params, body) => ???
  
       // Booleans
