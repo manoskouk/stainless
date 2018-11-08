@@ -78,13 +78,8 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   private[wasm] val funSortIds = MMap[FunctionType, Identifier]()
   private[wasm] val adtCodeID = FreshIdentifier("code")
 
-  sealed class FunPointerSort(ft: FunctionType)
-    extends RecordSort(
-      funSortIds.getOrElseUpdate(ft, FreshIdentifier(ft.asString(PrinterOptions()))),
-      Seq(),
-      None,
-      Seq(ValDef(funPointerId, ft))
-    )
+  sealed class FunPointerSort(id: Identifier, ft: FunctionType)
+    extends RecordSort(id, Seq(), None, Seq(ValDef(funPointerId, ft)))
 
   sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])
     extends RecordSort(FreshIdentifier("closure"), Seq(), Some(parent), env)

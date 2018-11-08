@@ -2,11 +2,28 @@ package stainless
 package wasm
 
 trait RecordAbstactor extends inox.transformers.SymbolTransformer with DefinitionTransformer {
-  import scala.collection.mutable.{Map => MMap}
-  private val newFunctions = MMap[Identifier, t.FunDef]()
-  private val newRecords = MMap[Identifier, t.RecordSort]()
- // private val tuple
+  
+  private object SymbolsManager {
+    import t._
+    import scala.collection.mutable.{Map => MMap}
+    private val newFunctions = MMap[Identifier, FunDef]()
+    private val newRecords = MMap[Identifier, RecordSort]()
 
+    private val funRecords = MMap[FunctionType, Identifier]()
+
+    def getFunTypeRecord(ft: FunctionType) =
+      funRecords.getOrElseUpdate(ft, {
+        val fr = new FunPointerSort(FreshIdentifier(ft.asString(PrinterOptions())), ft)
+        newRecords += fr.id -> fr
+        fr.id
+      })
+
+    def getRecord(id: Identifier) = newRecords.get(id)
+    def addRecord(r: RecordSort) = newRecords += r.id -> r
+
+    def getFunction(id: Identifier) = newFunctions.get(id)
+    def addFunction(fd: FunDef) = newFunctions += fd.id -> fd
+  }
 
   /** This transformer transforms expressions down to the fragment we want to compile to wasm.
     *
@@ -75,10 +92,60 @@ trait RecordAbstactor extends inox.transformers.SymbolTransformer with Definitio
         Let(vCallee.toVal, tCallee,
           Application(
             RecordSelector(vCallee, funPointerId),
-            CastUp(vCallee, ???) +: args.map(transform(_, env))
+            vCallee +: args.map(transform(_, env))
           )
         )
-      case s.Lambda(params, body) => ???
+      case lmd@s.Lambda(params, body) =>
+        val funType = transform(lmd.getType, env).asInstanceOf[FunctionType]
+        val fv = (s.exprOps.variablesOf(body) -- params.map(_.toVariable)).toSeq.map(transform(_, env)).asInstanceOf[Seq[Variable]]
+
+        // Make/find a RecordSort for this function type, and one with the specific env.
+        val funRecId = SymbolsManager.getFunTypeRecord(funType)
+
+        val funName = FreshIdentifier("lambda")
+        
+        val envIds = fv.map(_.freshen.toVal)
+        val closureRecord = new ClosureSort(funRecId, envIds)
+        SymbolsManager.addRecord(closureRecord)
+        
+        val funRecordType = RecordType(funRecId, Seq())
+        val closureType = RecordType(closureRecord.id, Seq())
+
+        val function = {
+          
+          val envArg  = ValDef.fresh("env", funRecordType)
+          val envArg2 = ValDef.fresh("env", closureType)
+          
+          // New function body has to copy environment to local variables
+          val extrEnv = fv.zip(envIds).foldRight(transform(body, env)) { case ((v, envId), rest) =>
+            Let(v.toVal, RecordSelector(envArg2.toVariable, envId.id), rest)
+          }
+
+          val fullBody = Let(envArg2, CastDown(envArg.toVariable, closureType), extrEnv)
+          
+          val fd = new FunDef(
+            FreshIdentifier("lambda"), Seq(),
+            envArg +: params.map(transform(_, env)),
+            funType.to,
+            fullBody,
+            Seq()
+          )
+
+          SymbolsManager.addFunction(fd)
+          fd
+        }
+
+        val closure = {
+          CastUp(
+            Record(
+              closureType,
+              FunctionPointer(function.id) +: fv
+            ),
+            funRecordType
+          )
+        }
+
+        closure
  
       // Booleans
       case s.And(exprs) => exprs.map(transform(_, env)).reduceRight(BVAnd)
@@ -210,7 +277,7 @@ trait RecordAbstactor extends inox.transformers.SymbolTransformer with Definitio
   def transform(syms: s.Symbols): t.Symbols = {
     val initSymbols = t.Symbols(
       syms.sorts flatMap { case (id, sort) => transform(sort) map (record => record.id -> record)},
-      syms.functions mapValues transform
+      Map()     
     )
 
 
