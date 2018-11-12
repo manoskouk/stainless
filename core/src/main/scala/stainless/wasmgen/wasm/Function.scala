@@ -1,26 +1,37 @@
 package stainless.wasmgen.wasm
-import Instructions.Code
 
-// If isMain = false, represents a function which returns an i32 and will not be exported to js
-// If isMain = true , represents a function which does not return a value, and will be exported to js
-class Function private (val name: String, val args: Int, val isMain: Boolean, val locals: Int, val code: Code) {
+import Expressions.Expr
+import Types.Type
+
+case class Function private (name: String, args: Seq[Type], returnType: Type, locals: Seq[Type], body: Expr) {
   override def toString: String = ModulePrinter(this)
 }
 
-class LocalsHandler(args: Int) {
-  private var locals_ = 0
-  def getFreshLocal(): Int = {
-    locals_ += 1
-    args + locals_ - 1
+class LocalsHandler[Id](args: Seq[(Id, Type)]) {
+  import scala.collection.mutable.{Map => MMap}
+  private var index = args.size - 1
+  private var locals_ = MMap[Id, (Int, Type)]()
+  locals_ ++= {
+    args.zipWithIndex.map{ case ((a, tpe), ind) =>
+      a -> (ind, tpe)
+    }
   }
-  private[wasmgen] def locals = locals_
+  def getFreshLocal(a: Id, tpe: Type): Int = {
+    index += 1
+    locals_ += a -> (index, tpe)
+    index
+  }
+  def getLocal(a: Id): Int = locals_(a)._1
+  private[wasmgen] def locals: Seq[Type] = {
+    locals_.toSeq.sortBy(_._2._1).map(_._2._2).drop(args.size)
+  }
 }
 
 object Function {
-  def apply(name: String, args: Int, isMain: Boolean)(codeGen: LocalsHandler => Code) = {
+  def apply[Id](name: String, args: Seq[(Id, Type)], returnType: Type)(codeGen: LocalsHandler[Id] => Expr): Function = {
     val lh = new LocalsHandler(args)
     // Make code first, as it may increment the locals in lh
-    val code = codeGen(lh)
-    new Function(name, args, isMain, lh.locals, code)
+    val body = codeGen(lh)
+    new Function(name, args map (_._2), returnType, lh.locals, body)
   }
 }
