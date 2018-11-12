@@ -2,7 +2,7 @@
 
 package stainless.wasmgen.intermediate
 
-import inox.ast.{Identifier, FreshIdentifier}
+import stainless.{Identifier, FreshIdentifier}
 
 trait Transformer extends stainless.transformers.Transformer {
   val s = stainless.trees
