@@ -1,3 +1,5 @@
+/* Copyright 2009-2018 EPFL, Lausanne */
+
 package stainless
 
 package object wasm {
@@ -19,4 +21,5 @@ package object wasm {
     }
     val NoSymbols: Symbols = Symbols(Map(), Map())
   }
+
 }

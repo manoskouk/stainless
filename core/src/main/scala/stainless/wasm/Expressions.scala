@@ -54,39 +54,57 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     def getType(implicit s: Symbols) = e2.getType
   }
 
-  sealed case class NewArray(length: Expr, init: Expr) extends Expr {
+  sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {
     def getType(implicit s: Symbols) =
-      if (length.getType == Int32Type())
-        unveilUntyped(ArrayType(init.getType))
+      if (length.getType == IndexType() && init.forall(_.getType == base)) ArrayType(base)
       else Untyped
   }
 
   sealed case class ArrayGet(array: Expr, index: Expr) extends Expr {
     def getType(implicit s: Symbols) = (array.getType, index.getType) match {
-      case (ArrayType(base), Int32Type()) => base
+      case (ArrayType(base), IndexType()) => base
       case _ => Untyped
     }
   }
   
   sealed case class ArraySet(array: Expr, index: Expr, value: Expr) extends Expr {
     def getType(implicit s: Symbols) = (array.getType, index.getType, value.getType) match {
-      case (ArrayType(base1), Int32Type(), base2) if base1 == base2 => UnitType()
+      case (ArrayType(base1), IndexType(), base2) if base1 == base2 => UnitType()
       case _ => Untyped
     }
   }
 
   sealed case class ArrayLength32(array: Expr) extends Expr {
     def getType(implicit s: Symbols) = array.getType match {
-      case ArrayType(_) => Int32Type()
+      case ArrayType(_) => IndexType()
       case _ => Untyped
     }
   }
 
-  sealed case class ArrayCopy(from: Expr, to: Expr, startIndex: Expr) extends Expr {
-    def getType(implicit s: Symbols) = (from.getType, to.getType, startIndex.getType) match {
-      case (ArrayType(base1), ArrayType(base2), Int32Type()) if base1 == base2 => UnitType()
+  /** Copies elements from array 'from' to array 'to',
+    * starting with the element at index 'start' and ending with the element at index 'end'-1
+    */
+  sealed case class ArrayCopy(from: Expr, to: Expr, start: Expr, end: Expr) extends Expr {
+    def getType(implicit s: Symbols) = (from.getType, to.getType, start.getType, end.getType) match {
+      case (ArrayType(base1), ArrayType(base2), IndexType(), IndexType()) if base1 == base2 => UnitType()
       case _ => Untyped
     }
   }
- 
+
+  // Helpers for unsigned literals
+  object IndexLiteral {
+    def apply(x: Int): BVLiteral = BVLiteral(false, BigInt(x), 32)
+    def unapply(e: Expr): Option[Int] = e match {
+      case b @ BVLiteral(false, _, 32) => Some(b.toBigInt.toByte)
+      case _ => None
+    }
+  }
+
+  object ByteLiteral {
+    def apply(x: Byte): BVLiteral = BVLiteral(false, BigInt(x), 8)
+    def unapply(e: Expr): Option[Byte] = e match {
+      case b @ BVLiteral(false, _, 8) => Some(b.toBigInt.toByte)
+      case _ => None
+    }
+  }
 }

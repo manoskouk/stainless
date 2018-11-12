@@ -1,6 +1,6 @@
-package stainless.wasm
+/* Copyright 2009-2018 EPFL, Lausanne */
 
-import stainless.Identifier
+package stainless.wasm
 
 trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
   protected val s: Trees
@@ -45,9 +45,9 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
       (_, _, es, _, _) => t.Sequence(es(0), es(1))
     )
 
-    case s.NewArray(length, init) => (
-      NoIdentifiers, NoVariables, Seq(length, init), NoTypes, NoFlags,
-      (_, _, es, _, _) => t.NewArray(es(0), es(1))
+    case s.NewArray(length, base, init) => (
+      NoIdentifiers, NoVariables, Seq(length) ++ init, Seq(base), NoFlags,
+      (_, _, es, tps, _) => t.NewArray(es(0), tps.head, if (es.size > 1) Some(es(1)) else None)
     )
 
     case s.ArrayGet(array, index) => (
@@ -65,9 +65,9 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
       (_, _, es, _, _) => t.ArrayLength(es.head)
     )
 
-    case s.ArrayCopy(from, to, start) => (
-      NoIdentifiers, NoVariables, Seq(from, to, start), NoTypes, NoFlags,
-      (_, _, es, _, _) => t.ArrayCopy(es(0), es(1), es(2))
+    case s.ArrayCopy(from, to, start, end) => (
+      NoIdentifiers, NoVariables, Seq(from, to, start, end), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.ArrayCopy(es(0), es(1), es(2), es(3))
     )
     case _ => super.deconstruct(expr)
   }

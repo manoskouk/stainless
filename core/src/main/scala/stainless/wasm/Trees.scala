@@ -11,9 +11,6 @@ trait Trees
     with Deconstructors
     with TreeOps { self =>
 
-  //type Symbol = ast.Symbol
-  //type SymbolIdentifier = ast.SymbolIdentifier
-
   override val exprOps: ExprOps { val trees: Trees.this.type } = new {
     protected val trees: Trees.this.type = Trees.this
   } with ExprOps

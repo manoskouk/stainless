@@ -18,7 +18,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     def lookupRecord(id: Identifier, tps: Seq[Type]): Option[TypedRecordSort] = lookupRecord(id).map(_.typed(tps))
     def getRecord(id: Identifier, tps: Seq[Type]): TypedRecordSort = getRecord(id).typed(tps)
 
-    def childrenOf(id: Identifier) = records.collect{ case (_, cs:ConstructorSort) if cs.parent == id => cs }
+    def childrenOf(id: Identifier) = records.collect{ case (_, cs:ConstructorSort) if cs.parent.contains(id) => cs }
   }
 
   /** A record type represents a sequence of named fields in memory.
