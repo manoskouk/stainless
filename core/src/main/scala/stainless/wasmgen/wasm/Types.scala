@@ -1,13 +1,16 @@
 package stainless.wasmgen.wasm
 
 object Types {
-  trait Type { def size: Int }
-  case object i32 extends Type { def size = 32 }
-  case object i64 extends Type { def size = 64 }
-  case object f32 extends Type { def size = 32 }
-  case object f64 extends Type { def size = 64 }
+  trait Type {
+    val size: Int
+    val bitSize = size * 8
+  }
+  case object i32 extends Type { val size = 4 }
+  case object i64 extends Type { val size = 8 }
+  case object f32 extends Type { val size = 4 }
+  case object f64 extends Type { val size = 8 }
   case object void extends Type {
-    def size = 0
+    val size = 0
     override def toString = ""
   }
 }

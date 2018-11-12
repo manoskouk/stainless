@@ -3,10 +3,10 @@ package wasmgen
 package wasm
 
 import scala.language.implicitConversions
+import Types._
 
 // A subset of instructions defined by the WASM standard
 object Expressions {
-  import Types._
   type Label = String
 
   abstract class Sign
@@ -24,7 +24,7 @@ object Expressions {
   case class load(loadType: Option[(Type,Sign)]) extends UnOp {
     override def toString = loadType match {
       case None => "load"
-      case Some((tpe, sign)) => s"load${tpe.size}_$sign"
+      case Some((tpe, sign)) => s"load${tpe.bitSize}_$sign"
     }
   }
   case class SetLocal(index: Int) extends UnOp {
@@ -77,7 +77,7 @@ object Expressions {
   case class store(storageSize: Option[Type]) extends BinOp {
     override def toString = storageSize match {
       case None => "store"
-      case Some(tpe) => s"store${tpe.size}"
+      case Some(tpe) => s"store${tpe.bitSize}"
     }
   }
 
