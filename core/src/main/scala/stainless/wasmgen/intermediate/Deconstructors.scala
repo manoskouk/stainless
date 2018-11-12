@@ -1,6 +1,6 @@
 /* Copyright 2009-2018 EPFL, Lausanne */
 
-package stainless.wasm
+package stainless.wasmgen.intermediate
 
 trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
   protected val s: Trees

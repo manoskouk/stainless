@@ -1,6 +1,6 @@
 /* Copyright 2009-2018 EPFL, Lausanne */
 
-package stainless.wasm
+package stainless.wasmgen.intermediate
 
 import inox.ast.Identifier
 

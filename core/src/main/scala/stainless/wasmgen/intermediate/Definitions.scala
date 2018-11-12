@@ -1,6 +1,6 @@
 /* Copyright 2009-2018 EPFL, Lausanne */
 
-package stainless.wasm
+package stainless.wasmgen.intermediate
 
 import inox.ast.{FreshIdentifier, Identifier}
 import inox.utils.Lazy
@@ -73,10 +73,10 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
       definition.ancestors
   }
 
-  private[wasm] val funPointerId = FreshIdentifier("funP")
+  private[wasmgen] val funPointerId = FreshIdentifier("funP")
   import scala.collection.mutable.{Map => MMap}
-  private[wasm] val funSortIds = MMap[FunctionType, Identifier]()
-  private[wasm] val adtCodeID = FreshIdentifier("code")
+  private[wasmgen] val funSortIds = MMap[FunctionType, Identifier]()
+  private[wasmgen] val adtCodeID = FreshIdentifier("code")
 
   sealed class FunPointerSort(id: Identifier, ft: FunctionType)
     extends RecordSort(id, Seq(), None, Seq(ValDef(funPointerId, ft)))

@@ -1,11 +1,12 @@
 /* Copyright 2009-2018 EPFL, Lausanne */
 
-package stainless
-package wasm
+package stainless.wasmgen.intermediate
 
-trait Transformer extends transformers.Transformer {
+import inox.ast.{Identifier, FreshIdentifier}
+
+trait Transformer extends stainless.transformers.Transformer {
   val s = stainless.trees
-  val t = wasm.trees
+  val t = trees
 
   type Env = s.Symbols
 
@@ -26,8 +27,6 @@ trait Transformer extends transformers.Transformer {
       case s.SetType(base) => ???
       case s.BagType(base) => ???
       case s.MapType(from, to) => ???
-      case s.RealType() => ???
-
 
       case s.PiType(params, to) =>
         FunctionType(
@@ -40,6 +39,7 @@ trait Transformer extends transformers.Transformer {
         transform(vd.getType(env), env)
 
       // These remain as is
+      // case s.RealType() =>  TODO: We will represent Reals as floats (?)
       // case s.FunctionType(from, to) =>
       // case s.ArrayType(base) =>
       // case s.BVType(signed, size) =>
@@ -50,8 +50,8 @@ trait Transformer extends transformers.Transformer {
   }
 }
 
-private[wasm] class SymbolsManager {
-  import wasm.trees._
+private[wasmgen] class SymbolsManager {
+  import trees._
   import scala.collection.mutable.{Map => MMap}
   val newFunctions: MMap[Identifier, FunDef] = MMap()
   val newRecords: MMap[Identifier, RecordSort] = MMap()
@@ -73,9 +73,9 @@ private[wasm] class SymbolsManager {
 }
 
 
-private [wasm] class ExprTransformer
+private [wasmgen] class ExprTransformer
     (manager: SymbolsManager, keepContracts: Boolean, sym0: stainless.trees.Symbols)
-    (implicit  sym: wasm.trees.Symbols)
+    (implicit  sym: trees.Symbols)
   extends Transformer
 {
   import t._
@@ -362,7 +362,8 @@ private [wasm] class ExprTransformer
   * - Arrays become mutable
   * - Chars become i8
   * - Booleans and Unit become i32
-  * - BigInts become i64 (Currently, will be fixed in the future)
+  * - BigInts become i64 (Currently, will be fixed in the future) (this is done later in the pipeline)
+  * - Reals become floats (this is done later in the pipeline)
   * - Composite types become records. Records are extensible structs in memory. See [[Definitions.RecordSort]]
   *
   * TODOs:

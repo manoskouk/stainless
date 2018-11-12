@@ -1,8 +1,10 @@
 /* Copyright 2009-2018 EPFL, Lausanne */
 
-package stainless
+package stainless.wasmgen
 
-package object wasm {
+import inox.ast.Identifier
+
+package object intermediate {
   object trees extends Trees { self =>
     object printer extends Printer {
       val trees: self.type = self
