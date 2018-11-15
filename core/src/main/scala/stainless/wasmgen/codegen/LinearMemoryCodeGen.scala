@@ -11,7 +11,9 @@ import wasm.Types._
   */
 class LinearMemoryCodeGen extends CodeGeneration {
   
-  def mkRecord(recordType: t.RecordType, exprs: Seq[Expr]) = ???
+  def mkRecord(recordType: t.RecordType, exprs: Seq[Expr]): Expr = {
+    
+  }
 
   def mkRecordSelector(expr: Expr, id: Identifier) = ???
 
