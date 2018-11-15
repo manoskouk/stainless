@@ -3,44 +3,46 @@ package wasmgen
 package codegen
 
 import intermediate.{trees => t}
-import stainless.wasmgen.wasm.LocalsHandler
+import wasm.{LocalsHandler, GlobalsHandler}
 import wasm.Expressions.{eq => EQ, _}
-import wasm.Types
-import wasm.Types.Type
+import wasm.Types._ 
 
 trait CodeGeneration {
-  def mkRecord(recordType: t.RecordType, exprs: Seq[Expr]): Expr
-  def mkRecordSelector(expr: Expr, id: Identifier): Expr
-  def mkFunctionPointer(id: Identifier): Expr
-  def mkCastDown(expr: Expr, subType: t.RecordType): Expr
-  def mkCastUp(expr: Expr, superType: t.RecordType): Expr
-  def mkNewArray(length: Expr, base: Type, init: Option[Expr]): Expr
-  def mkArrayGet(expr: Expr, expr1: Expr): Expr
-  def mkArraySet(expr: Expr, expr1: Expr, expr2: Expr): Expr
-  def mkArrayLength(expr: Expr): Expr
-  def mkArrayCopy(expr: Expr, expr1: Expr, expr2: Expr, expr3: Expr): Expr
-  def mkApplication(expr: Expr, exprs: Seq[Expr]): Expr
-  def mkUnbox0(e: Expr, tpe: Type): Expr
-  final def mkUnbox(from: t.Type, to: t.Type, expr: Expr)(implicit s: t.Symbols): Expr = {
+  protected type LH = LocalsHandler
+  protected type S  = t.Symbols
+
+  protected val gh: GlobalsHandler
+
+  protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit s: S, lh: LH): Expr
+  protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit s: S, lh: LH): Expr
+  protected def mkFunctionPointer(id: Identifier)(implicit s: S, lh: LH): Expr
+  protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit s: S, lh: LH): Expr
+  protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit s: S, lh: LH): Expr
+  protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit s: S, lh: LH): Expr
+  protected def mkArrayGet(expr: Expr, expr1: Expr)(implicit s: S, lh: LH): Expr
+  protected def mkArraySet(expr: Expr, expr1: Expr, expr2: Expr)(implicit s: S, lh: LH): Expr
+  protected def mkArrayLength(expr: Expr)(implicit s: S, lh: LH): Expr
+  protected def mkArrayCopy(expr: Expr, expr1: Expr, expr2: Expr, expr3: Expr)(implicit s: S, lh: LH): Expr
+  protected def mkApplication(expr: Expr, exprs: Seq[Expr])(implicit s: S, lh: LH): Expr
+  protected def mkUnbox0(e: Expr, tpe: Type)(implicit s: S, lh: LH): Expr
+  protected def mkBox0(expr: Expr, tpe: Type)(implicit s: S, lh: LH): Expr
+  final protected def mkUnbox(from: t.Type, to: t.Type, expr: Expr)(implicit s: S, lh: LH): Expr = {
     if (from.isInstanceOf[t.TypeParameter] && !to.isInstanceOf[t.TypeParameter]) mkUnbox0(expr, transform(to))
     else expr
   }
-  final def mkBox(from: t.Type, to: t.Type, expr: Expr)(implicit s: t.Symbols): Expr = {
+  final protected def mkBox(from: t.Type, to: t.Type, expr: Expr)(implicit s: S, lh: LH): Expr = {
     if (!from.isInstanceOf[t.TypeParameter] && to.isInstanceOf[t.TypeParameter]) mkBox0(expr, transform(from))
     else expr
   }
-  def mkBox0(expr: Expr, tpe: Type): Expr
 
-  def transform(tpe: t.Type)(implicit s: t.Symbols): Type
-
-  final def typeToSign(tpe: t.Typed)(implicit s: t.Symbols): Sign = {
+  final protected def typeToSign(tpe: t.Typed)(implicit s: t.Symbols): Sign = {
     tpe.getType match {
       case t.BVType(false, _) => Unsigned
       case _ => Signed
     }
   }
 
-  final def typeToOp(tpe: t.Typed, intOp: Sign => BinOp, floatOp: BinOp)(implicit s: t.Symbols): BinOp = {
+  final protected def typeToOp(tpe: t.Typed, intOp: Sign => BinOp, floatOp: BinOp)(implicit s: t.Symbols): BinOp = {
     tpe.getType match {
       case t.RealType() => floatOp
       case t.BVType(false, _) => intOp(Unsigned)
@@ -48,29 +50,30 @@ trait CodeGeneration {
     }
   }
 
-  final def typeToZero(tpe: Type): Expr = tpe match {
-    case Types.i32 => I32Const(0)
-    case Types.i64 => I64Const(0)
-    case Types.f32 => F32Const(0)
-    case Types.f64 => F64Const(0)
+  final protected def typeToZero(tpe: Type): Expr = tpe match {
+    case `i32` => I32Const(0)
+    case `i64` => I64Const(0)
+    case `f32` => F32Const(0)
+    case `f64` => F64Const(0)
   }
 
-  final def mkBin(op: BinOp, lhs: t.Expr, rhs: t.Expr)(implicit s: t.Symbols, lh: LocalsHandler[Identifier]): Expr = {
+  final protected def mkBin(op: BinOp, lhs: t.Expr, rhs: t.Expr)(implicit s: S, lh: LH): Expr = {
     Binary(op, transform(lhs.getType), transform(lhs), transform(rhs))
   }
 
-  final def mkBin(op: UnOp, e: t.Expr)(implicit s: t.Symbols, lh: LocalsHandler[Identifier]): Expr = {
-    Unary(op, transform(e.getType), transform(e))
-  }
+  def transform(tpe: t.Type)(implicit s: t.Symbols): Type
 
-  final def transform(expr: t.Expr)(implicit s: t.Symbols, lh: LocalsHandler[Identifier]): Expr = expr match {
+  final def transform(expr: t.Expr)(implicit s: S, lh: LH): Expr = expr match {
     case t.NoTree(tpe) =>
       Unreachable
     case t.Variable(id, tpe, flags) =>
-      GetLocal(lh.getLocal(id))
+      GetLocal(id.uniqueName)
     case t.Let(vd, value, body) =>
-      val local = lh.getFreshLocal(vd.id, transform(vd.getType))
-      Sequence(Seq(Unary(SetLocal(local), transform(vd.getType), transform(value)), transform(body)))
+      lh.getFreshLocal(vd.id.uniqueName, transform(vd.getType))
+      Sequence(Seq(
+        SetLocal(vd.id.uniqueName, transform(value)),
+        transform(body)
+      ))
     case t.Output(msg) => ???
     case fi@t.FunctionInvocation(id, tps, args) =>
       val trArgs = args.zip(s.lookupFunction(id).get.params) map { case (arg, formal) =>
@@ -79,7 +82,7 @@ trait CodeGeneration {
       mkUnbox(
         s.lookupFunction(id).get.returnType,
         fi.getType,
-        Call(id.uniqueName, trArgs)
+        Call(id.uniqueName, transform(fi.getType), trArgs)
       )
     case t.IfExpr(cond, thenn, elze) =>
       If(
@@ -94,10 +97,20 @@ trait CodeGeneration {
       // FIXME This is only ref. equality
 
     case t.Record(tpe, fields) =>
-      mkRecord(tpe, fields map transform)
-    case t.RecordSelector(record, selector) =>
-      mkRecordSelector(transform(record), selector)
-
+      val formals = tpe.getRecord.definition.flattenFields
+      mkRecord(tpe, fields.zip(formals) map { case (fd, formal) =>
+        mkBox(fd.getType, formal.getType, transform(fd))
+      })
+    case rs@t.RecordSelector(record, selector) =>
+      val rt = record.getType.asInstanceOf[t.RecordType]
+      val realType = rs.getType
+      val formalType = rt
+        .getRecord.definition
+        .flattenFields.find(_.id == selector).get
+        .getType
+      mkUnbox(formalType, realType,
+        mkRecordSelector(transform(record), rt, selector)
+      )
     case t.FunctionPointer(id) =>
       mkFunctionPointer(id)
     case t.Application(callee, args) =>
@@ -133,7 +146,7 @@ trait CodeGeneration {
       mkBin(rem(typeToSign(lhs)), lhs, rhs) // FIXME
     case t.UMinus(e) =>
       e.getType match {
-        case t.RealType() => Unary(neg, Types.f64, transform(e))
+        case t.RealType() => Unary(neg, f64, transform(e))
         case tpe =>
           Binary(sub, transform(tpe), typeToZero(transform(tpe)), transform(e))
       }

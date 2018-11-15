@@ -84,16 +84,46 @@ object ModulePrinter {
           ")"
         )
       case Br(label) => s"(br $label)"
-      case Call(name, args) =>
+      case Call(name, _, args) =>
         Stacked(
           s"(call $name",
           Indented(Stacked(args map mkExpr: _*)),
           ")"
         )
+      case Load(tpe, truncate, expr) =>
+        val ts = truncate match {
+          case Some((tpe, sign)) => s"${tpe}_$sign"
+          case None => ""
+        }
+        Stacked(
+          s"($tpe.load$ts",
+          Indented(mkExpr(expr)),
+          ")"
+        )
+      case Store(tpe, truncate, address, value) =>
+        val ts = truncate.map(_.bitSize.toString).getOrElse("")
+        Stacked(
+          s"($tpe.store$ts",
+          Indented(mkExpr(address)),
+          Indented(mkExpr(value))
+        )
       case Return => "return"
       case Unreachable => "unreachable"
-      case GetLocal(index)  => s"(get_local $index)"
-      case GetGlobal(index) => s"(get_global $index)"
+      case Drop => "drop"
+      case GetLocal(label)  => s"(get_local $$$label)"
+      case SetLocal(label, value) =>
+        Stacked(
+          s"(set_local $$$label",
+          Indented(mkExpr(value)),
+          s")"
+        )
+      case GetGlobal(label) => s"(get_global $$$label)"
+      case SetGlobal(label, value) =>
+        Stacked(
+          s"(set_global $$$label",
+          Indented(mkExpr(value)),
+          s")"
+        )
       case Extend(to, from, sign, e) =>
         Stacked(
           s"($to.extend_$sign/$from",
