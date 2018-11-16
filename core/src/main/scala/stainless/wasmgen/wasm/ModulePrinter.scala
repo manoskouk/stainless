@@ -84,6 +84,12 @@ object ModulePrinter {
           ")"
         )
       case Br(label) => s"(br $label)"
+      case Br_If(label, cond) =>
+        Stacked(
+          s"(br_if $label",
+          Indented(mkExpr(cond)),
+          ")"
+        )
       case Call(name, _, args) =>
         Stacked(
           s"(call $name",

@@ -19,7 +19,7 @@ trait CodeGeneration {
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit s: S, lh: LH): Expr
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit s: S, lh: LH): Expr
   protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit s: S, lh: LH): Expr
-  protected def mkArrayGet(expr: Expr, expr1: Expr)(implicit s: S, lh: LH): Expr
+  protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit s: S, lh: LH): Expr
   protected def mkArraySet(expr: Expr, expr1: Expr, expr2: Expr)(implicit s: S, lh: LH): Expr
   protected def mkArrayLength(expr: Expr)(implicit s: S, lh: LH): Expr
   protected def mkArrayCopy(expr: Expr, expr1: Expr, expr2: Expr, expr3: Expr)(implicit s: S, lh: LH): Expr
@@ -50,11 +50,11 @@ trait CodeGeneration {
     }
   }
 
-  final protected def typeToZero(tpe: Type): Expr = tpe match {
-    case `i32` => I32Const(0)
-    case `i64` => I64Const(0)
-    case `f32` => F32Const(0)
-    case `f64` => F64Const(0)
+  final protected def typeToConst(tpe: Type, const: Byte): Expr = tpe match {
+    case `i32` => I32Const(const)
+    case `i64` => I64Const(const)
+    case `f32` => F32Const(const)
+    case `f64` => F64Const(const)
   }
 
   final protected def mkBin(op: BinOp, lhs: t.Expr, rhs: t.Expr)(implicit s: S, lh: LH): Expr = {
@@ -93,8 +93,8 @@ trait CodeGeneration {
         transform(elze)
       )
     case t.Equals(lhs, rhs) =>
-      mkBin(EQ, lhs, rhs)
       // FIXME This is only ref. equality
+      mkBin(EQ, lhs, rhs)
 
     case t.Record(tpe, fields) =>
       val formals = tpe.getRecord.definition.flattenFields
@@ -123,8 +123,8 @@ trait CodeGeneration {
 
     case t.NewArray(length, base, init) =>
       mkNewArray(transform(length), transform(base), init map transform)
-    case t.ArrayGet(array, index) =>
-      mkArrayGet(transform(array), transform(index))
+    case ag@t.ArrayGet(array, index) =>
+      mkArrayGet(transform(array), transform(ag.getType), transform(index))
     case t.ArraySet(array, index, value) =>
       mkArraySet(transform(array), transform(index), transform(value))
     case t.ArrayLength32(array) =>
@@ -148,7 +148,7 @@ trait CodeGeneration {
       e.getType match {
         case t.RealType() => Unary(neg, f64, transform(e))
         case tpe =>
-          Binary(sub, transform(tpe), typeToZero(transform(tpe)), transform(e))
+          Binary(sub, transform(tpe), typeToConst(transform(tpe), 0), transform(e))
       }
     case t.LessThan(lhs, rhs) =>
       mkBin(typeToOp(lhs, lt(_), lt), lhs, rhs)
@@ -161,7 +161,7 @@ trait CodeGeneration {
 
     case t.BVNot(e) =>
       val tpe = transform(e.getType)
-      Binary(xor, tpe, typeToZero(tpe), transform(e))
+      Binary(xor, tpe, typeToConst(tpe, 0), transform(e))
     case t.BVAnd(lhs, rhs) =>
       mkBin(and, lhs, rhs)
     case t.BVOr(lhs, rhs) =>

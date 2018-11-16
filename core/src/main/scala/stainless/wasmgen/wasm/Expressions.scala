@@ -106,9 +106,14 @@ object Expressions { self =>
     val getType = tpe
   }
   // Jump to "label", which MUST be the label of an enclosing structure
-  case class Br(label: Label)  extends Expr {
+  case class Br(label: Label) extends Expr {
     val getType = void
   }
+
+  case class Br_If(label: Label, cond: Expr) extends Expr {
+    val getType = void
+  }
+
   case class Call(name: Label, tpe: Type, args: Seq[Expr]) extends Expr {
     val getType = tpe
   }
