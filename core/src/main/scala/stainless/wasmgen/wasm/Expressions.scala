@@ -117,6 +117,11 @@ object Expressions { self =>
   case class Call(name: Label, tpe: Type, args: Seq[Expr]) extends Expr {
     val getType = tpe
   }
+
+  case class Call_Indirect(tpe: Type, func: Expr, args: Seq[Expr]) extends Expr {
+    val getType = tpe
+  }
+
   case object Drop extends Expr {
     val getType = void
   }

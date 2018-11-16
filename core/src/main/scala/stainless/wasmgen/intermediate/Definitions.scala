@@ -95,4 +95,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     fields: Seq[ValDef]
   ) extends RecordSort(id, tparams, Some(parent), fields)
 
+  // Used to tag dynamically called functions
+  case object Dynamic extends Flag("dynamic", Seq.empty)
+
 }

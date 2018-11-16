@@ -2,8 +2,16 @@ package stainless
 package wasmgen
 package wasm
 
+import Definitions._
+
 // A WebAssembly module
-case class Module(name: String, imports: List[String], globals: Int, functions: List[Function]) {
+case class Module(
+  name: Label,
+  imports: Seq[Import],
+  globals: Seq[ValDef],
+  table: Table,
+  functions: Seq[FunDef]
+) {
 
   import java.io.{File, FileWriter}
 

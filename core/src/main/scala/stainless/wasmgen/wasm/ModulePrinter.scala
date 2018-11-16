@@ -2,38 +2,35 @@ package stainless.wasmgen.wasm
 
 import scala.language.implicitConversions
 import Expressions._
+import Definitions._
 
 // Printer for Wasm modules
 object ModulePrinter {
   private implicit def s2d(s: String) = Raw(s)
 
-  private def mkMod(mod: Module): Document = Stacked(
+  private def mkMod(mod: Module): Document = ??? /*Stacked(
     "(module ",
     Indented(Stacked(mod.imports map mkImport)),
     Indented("(global (mut i32) i32.const 0) " * mod.globals),
     Indented(Stacked(mod.functions map mkFun)),
     ")"
-  )
+  )*/
 
   private def mkImport(s: String): Document =
     Lined(List("(import ", s, ")"))
 
-  private def mkFun(fh: Function): Document = {
-    val Function(name, args, returnType, locals, body) = fh
+  private def mkFun(fh: FunDef): Document = {
+    val FunDef(name, args, returnType, locals, body) = fh
     val exportDoc: Document = s"""(export "$name" (func $$$name))"""
-    val paramsDoc: Document = if (args.isEmpty) "" else {
-      Lined(List(
-        "(param ",
-        Lined(args.toList map (arg => Raw(arg.toString)), " "),
-        ") "
-      ))
-    }
+    val paramsDoc: Document =
+      Lined(args.toList map { case ValDef(name, tpe) =>
+        Raw(s"(param $$$name $tpe) ")
+      })
     val resultDoc: Document = s"(result $returnType) "
-    val localsDoc: Document =
-      if (locals.nonEmpty)
-        "(local " <:> Lined(locals.toList map (l => Raw(l.toString)), " ") <:> ")"
-      else
-        ""
+    val localsDoc: Document = 
+      Lined(locals.toList map { case ValDef(name, tpe) =>
+        Raw(s"(local $$$name $tpe) ")
+      })
 
     Stacked(
       exportDoc,
@@ -96,6 +93,12 @@ object ModulePrinter {
           Indented(Stacked(args map mkExpr: _*)),
           ")"
         )
+      case Call_Indirect(_, fun, args) =>
+        Stacked(
+          "(call_indirect",
+          Indented(Stacked( (fun +: args) map mkExpr: _*)),
+          ")"
+        )
       case Load(tpe, truncate, expr) =>
         val ts = truncate match {
           case Some((tpe, sign)) => s"${tpe}_$sign"
@@ -153,7 +156,7 @@ object ModulePrinter {
   }
 
   def apply(mod: Module) = mkMod(mod).print
-  def apply(fh: Function) = mkFun(fh).print
+  def apply(fh: FunDef) = mkFun(fh).print
   def apply(expr: Expr) = mkExpr(expr).print
 
 }

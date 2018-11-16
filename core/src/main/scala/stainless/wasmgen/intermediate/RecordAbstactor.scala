@@ -183,7 +183,7 @@ private [wasmgen] class ExprTransformer
             envArg +: params.map(transform(_, env)),
             funType.to,
             fullBody,
-            Seq()
+            Seq(Dynamic)
           )
 
           manager.addFunction(fd)

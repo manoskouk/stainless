@@ -5,19 +5,23 @@ import stainless.{Identifier, FreshIdentifier}
 import intermediate.{trees => t}
 import wasm.Expressions._
 import wasm.Types._
-import wasm.GlobalsHandler
+import wasm.Definitions._
 
 /** Assumes global variable 0 points to the free linear memory boundary
   * 
   */
 class LinearMemoryCodeGen extends CodeGeneration {
-  protected implicit val gh = new GlobalsHandler()
-
   private val memB = "memB"
 
   private def freshLabel(s: String) = FreshIdentifier(s).uniqueName
-  
-  protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit s: S, lh: LH): Expr = {
+
+  protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
+  protected def mkTable(s: t.Symbols) = Table(
+    s.functions.values.toSeq.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
+  )
+
+  protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr = {
+    implicit val gh = env.gh
     // offsets for fields, with last element being the new memory boundary
     val offsets = exprs.scanLeft(0)(_ + _.getType.size)
     Sequence(
@@ -30,7 +34,8 @@ class LinearMemoryCodeGen extends CodeGeneration {
     )
   }
 
-  protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit s: S, lh: LH): Expr = {
+  protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr = {
+    implicit val s = env.s
     val fields = rt.getRecord.definition.flattenFields
     val sizeBefore = fields
       .takeWhile(_.id != id)
@@ -41,14 +46,19 @@ class LinearMemoryCodeGen extends CodeGeneration {
       add(expr, add(I32Const(4), I32Const(sizeBefore)))
     )
   }
-  protected def mkFunctionPointer(id: Identifier)(implicit s: S, lh: LH): Expr = ???
 
-  protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit s: S, lh: LH): Expr = expr
-  protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit s: S, lh: LH): Expr = expr
+  protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr = {
+    I32Const(env.tab.indexOf(id.uniqueName))
+  }
 
-  protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit s: S, lh: LH): Expr = {
+  protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr = expr
+  protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr = expr
+
+  protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit env: Env): Expr = {
+    implicit val lh = env.lh
+    implicit val gh = env.gh
     val len  = lh.getFreshLocal(freshLabel("length"), i32)
-    val ind  = lh.getFreshLocal(freshLabel("index"), i32)
+    val ind  = lh.getFreshLocal(freshLabel("index"),  i32)
     val loop = freshLabel("loop")
     def indToPtr(e: Expr) = add(GetGlobal(memB), add(I32Const(4), mul(I32Const(base.size), e)))
     Sequence( Seq(
@@ -73,14 +83,14 @@ class LinearMemoryCodeGen extends CodeGeneration {
     ))
   }
 
-  protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit s: S, lh: LH): Expr = {
+  protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr = {
     Load(
       base, None,
       add(array, add(I32Const(4), mul(index, I32Const(base.size))))
     )
   }
 
-  protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit s: S, lh: LH): Expr = {
+  protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr = {
     Store(
       value.getType, None,
       add(array, add(I32Const(4), mul(index, I32Const(value.getType.size)))),
@@ -88,22 +98,20 @@ class LinearMemoryCodeGen extends CodeGeneration {
     )
   }
 
-  protected def mkArrayLength(expr: Expr)(implicit s: S, lh: LH): Expr = Load(i32, None, expr)
+  protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
 
-  protected def mkArrayCopy(expr: Expr, expr1: Expr, expr2: Expr, expr3: Expr)(implicit s: S, lh: LH): Expr = ???
+  protected def mkArrayCopy(expr: Expr, expr1: Expr, expr2: Expr, expr3: Expr)(implicit env: Env): Expr = ???
 
-  protected def mkApplication(expr: Expr, exprs: Seq[Expr])(implicit s: S, lh: LH): Expr = ???
+  protected def mkUnbox0(e: Expr, tpe: Type)(implicit env: Env): Expr = Load(tpe, None, e)
 
-  protected def mkUnbox0(e: Expr, tpe: Type)(implicit s: S, lh: LH): Expr = Load(tpe, None, e)
-
-  protected def mkBox0(expr: Expr, tpe: Type)(implicit s: S, lh: LH): Expr = {
+  protected def mkBox0(expr: Expr, tpe: Type)(implicit env: Env): Expr = {
+    implicit val gh = env.gh
     Sequence( Seq(
       GetGlobal(memB),
       Store(expr.getType, None, GetGlobal(memB), expr),
       SetGlobal(memB, add(GetGlobal(memB), I32Const(expr.getType.size)))
     ))
   }
-
 
   def transform(tpe: t.Type)(implicit s: t.Symbols) = tpe match {
     case t.IntegerType() => i64
