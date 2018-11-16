@@ -100,7 +100,33 @@ class LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
 
-  protected def mkArrayCopy(expr: Expr, expr1: Expr, expr2: Expr, expr3: Expr)(implicit env: Env): Expr = ???
+  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, finish: Expr)(implicit env: Env): Expr = { ??? /*
+    implicit val lh = env.lh
+    implicit val gh = env.gh
+    val f = lh.getFreshLocal(freshLabel("from"), i32)
+    val t = lh.getFreshLocal(freshLabel("to"), i32)
+    val ind  = lh.getFreshLocal(freshLabel("index"),  i32)
+    val loop = freshLabel("loop")
+    def indToPtr(arr: Label, e: Expr) = add(GetLocal(arr), add(I32Const(4), mul(I32Const(base.size), e)))
+    Sequence( Seq(
+      SetLocal(len, length),
+      Store(i32, None, GetGlobal(memB), GetLocal(len)),
+      SetLocal(ind, I32Const(0))
+    ) ++ (init match {
+      case Some(elem) =>
+        val initL = lh.getFreshLocal(freshLabel("init"), base)
+        Seq(
+          SetLocal(initL, elem),
+          Branch(loop, void, Sequence(Seq(
+            Br_If(loop, ge(GetLocal(ind), GetLocal(len))),
+            Store(base, None, indToPtr(GetLocal(ind)), GetLocal(initL)),
+            SetLocal(ind, add(GetLocal(ind), I32Const(1)))
+          )))
+        )
+      case None =>
+        Seq()
+    }*/
+  }
 
   protected def mkUnbox0(e: Expr, tpe: Type)(implicit env: Env): Expr = Load(tpe, None, e)
 

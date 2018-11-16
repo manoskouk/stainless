@@ -37,7 +37,7 @@ trait CodeGeneration {
   protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
-  protected def mkArrayCopy(from: Expr, to: Expr, start: Expr, end: Expr)(implicit env: Env): Expr
+  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, end: Expr)(implicit env: Env): Expr
   protected def mkUnbox0(e: Expr, tpe: Type)(implicit env: Env): Expr
   protected def mkBox0(expr: Expr, tpe: Type)(implicit env: Env): Expr
   final protected def mkUnbox(from: t.Type, to: t.Type, expr: Expr)(implicit env: Env): Expr = {
@@ -171,7 +171,9 @@ trait CodeGeneration {
       case t.ArrayLength32(array) =>
         mkArrayLength(transform(array))
       case t.ArrayCopy(from, to, start, end) =>
-        mkArrayCopy(transform(from), transform(to), transform(start), transform(end))
+        mkArrayCopy(transform(from.getType.asInstanceOf[t.ArrayType].base),
+          transform(from), transform(to), transform(start), transform(end)
+        )
 
       case t.Plus(lhs, rhs) =>
         mkBin(add, lhs, rhs)
