@@ -12,69 +12,73 @@ object Expressions { self =>
   case object Signed   extends Sign { override def toString = "s" }
   case object Unsigned extends Sign { override def toString = "u" }
 
-  abstract class UnOp {
-    def apply(e1: Expr) = Unary(this, e1.getType, e1)
-  }
-  // Int only
-  case object eqz extends UnOp // Return 1 if operand is 0, 0 otherwise
-  // TODO: Add the rest
-  // Float only
-  case object neg extends UnOp
-  // TODO: ADD the rest
-
-  abstract class BinOp {
-    def apply(e1: Expr, e2: Expr) = Binary(this, e1.getType, e1, e2)
-  }
-  trait Signed {
+  trait RelOp
+  trait SignedOp {
     val sign: Sign
-    val name = getClass.getName.init
+    private val name = getClass.getName.init
 
     override def toString = s"${name}_$sign"
   }
 
+  abstract class UnOp {
+    def apply(e1: Expr) = Unary(this, e1.getType, e1)
+  }
+  // Int only
+  case object eqz extends UnOp with RelOp // Return 1 if operand is 0, 0 otherwise
+  // TODO: Add the rest
+  // Float only
+  case object neg extends UnOp with RelOp
+  // TODO: ADD the rest
+
+
+
+  abstract class BinOp {
+    def apply(e1: Expr, e2: Expr) = Binary(this, e1.getType, e1, e2)
+  }
+
   // mk: This is a little hacky since we use the same names for multiple operations but oh well
   // Int and float instructions
-  case object add extends BinOp 
+  case object add extends BinOp
   case object sub extends BinOp
   case object mul extends BinOp
-  case object eq  extends BinOp
-  case object ne  extends BinOp
+  case object eq  extends BinOp with RelOp
+  case object ne  extends BinOp with RelOp
   // Int only
-  case class div(sign: Sign) extends BinOp with Signed
-  case class rem(sign: Sign) extends BinOp with Signed
+  case class div(sign: Sign) extends BinOp with SignedOp
+  case class rem(sign: Sign) extends BinOp with SignedOp
   case object and extends BinOp
   case object or  extends BinOp
   case object xor extends BinOp
   case object shl extends BinOp
-  case class shr(sign: Sign) extends BinOp with Signed
+  case class shr(sign: Sign) extends BinOp with SignedOp
   case object rotl extends BinOp
   case object rotr extends BinOp
-  case class lt(sign: Sign) extends BinOp with Signed
-  case class le(sign: Sign) extends BinOp with Signed
-  case class gt(sign: Sign) extends BinOp with Signed
-  case class ge(sign: Sign) extends BinOp with Signed
+  case class lt(sign: Sign) extends BinOp with SignedOp with RelOp
+  case class le(sign: Sign) extends BinOp with SignedOp with RelOp
+  case class gt(sign: Sign) extends BinOp with SignedOp with RelOp
+  case class ge(sign: Sign) extends BinOp with SignedOp with RelOp
   // float only
   case object div extends BinOp
   case object min extends BinOp
   case object max extends BinOp
   case object copysign extends BinOp
-  case object lt extends BinOp
-  case object le extends BinOp
-  case object gt extends BinOp
-  case object ge extends BinOp
+  case object lt extends BinOp with RelOp
+  case object le extends BinOp with RelOp
+  case object gt extends BinOp with RelOp
+  case object ge extends BinOp with RelOp
 
   abstract class Expr { def getType: Type }
 
   // Operators
   case class Binary(op: BinOp, tpe: Type, lhs: Expr, rhs: Expr) extends Expr {
     val getType = op match {
-      case self.eq | self.ne => i32
+      case _: RelOp => i32
       case _ => tpe
     }
   }
   case class Unary(op: UnOp, tpe: Type, expr: Expr) extends Expr {
     val getType = op match {
-      case `eqz` => i32
+      case _: RelOp => i32
       case _ => tpe
     }
   }
