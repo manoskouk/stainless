@@ -7,7 +7,9 @@ import wasm.Expressions._
 import wasm.Types._
 import wasm.Definitions._
 
-/** Assumes global variable 0 points to the free linear memory boundary
+/** Implements memory allocations in linear memory
+  *
+  * Global variable 0 points to the free linear memory boundary
   * 
   */
 class LinearMemoryCodeGen extends CodeGeneration {
@@ -25,6 +27,7 @@ class LinearMemoryCodeGen extends CodeGeneration {
     // offsets for fields, with last element being the new memory boundary
     val offsets = exprs.scanLeft(0)(_ + _.getType.size)
     Sequence(
+      GetGlobal(memB) +: // Leave the original memB, aka the pointer to the new rec, on the bottom of the stack to be returned
       exprs
         .zip(offsets)
         .map { case (e, off) =>
@@ -51,6 +54,7 @@ class LinearMemoryCodeGen extends CodeGeneration {
     I32Const(env.tab.indexOf(id.uniqueName))
   }
 
+  // Type casts are trivial
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr = expr
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr = expr
 
@@ -62,6 +66,7 @@ class LinearMemoryCodeGen extends CodeGeneration {
     val loop = freshLabel("loop")
     def indToPtr(e: Expr) = add(GetGlobal(memB), add(I32Const(4), mul(I32Const(base.size), e)))
     Sequence( Seq(
+      GetGlobal(memB), // Leave the original memB, aka the pointer to the new array, on the bottom of the stack to be returned
       SetLocal(len, length),
       Store(i32, None, GetGlobal(memB), GetLocal(len)),
       SetLocal(ind, I32Const(0))
@@ -133,13 +138,13 @@ class LinearMemoryCodeGen extends CodeGeneration {
   protected def mkBox0(expr: Expr, tpe: Type)(implicit env: Env): Expr = {
     implicit val gh = env.gh
     Sequence( Seq(
-      GetGlobal(memB),
+      GetGlobal(memB), // Leave the original memB, aka the pointer to the new boxed value, on the bottom of the stack to be returned
       Store(expr.getType, None, GetGlobal(memB), expr),
       SetGlobal(memB, add(GetGlobal(memB), I32Const(expr.getType.size)))
     ))
   }
 
-  def transform(tpe: t.Type)(implicit s: t.Symbols) = tpe match {
+  def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
     case t.IntegerType() => i64
     case t.RealType() => f64
     case t.BVType(_, size) => if (size == 64) i64 else i32

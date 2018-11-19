@@ -279,15 +279,11 @@ private [wasmgen] class ExprTransformer
               )
             )))
       case s.SubString(expr, start, end) =>
-        val from = Variable.fresh("from", StrType)
-        val to = Variable.fresh("to", StrType)
         val startV = Variable.fresh("start", IndexType())
         val endV = Variable.fresh("end", IndexType())
-        Let(from.toVal, transform(expr, env),
-          Let(startV.toVal, transform(start, env),
-            Let(endV.toVal, transform(end, env),
-              Let(to.toVal, NewArray(Minus(endV, startV), ByteType(), None),
-                ArrayCopy(from, to, startV, endV) ))))
+        Let(startV.toVal, transform(start, env),
+          Let(endV.toVal, transform(end, env),
+            ArrayCopy(transform(expr, env), NewArray(Minus(endV, startV), ByteType(), None), startV, endV) ))
 
       case s.StringLength(expr) =>
         ArrayLength32(transform(expr, env))

@@ -5,7 +5,7 @@ package codegen
 import intermediate.{trees => t}
 import wasm._
 import Expressions.{eq => EQ, _}
-import Types._ 
+import Types._
 import Definitions._
 
 trait CodeGeneration {
@@ -23,7 +23,9 @@ trait CodeGeneration {
     lh: LocalsHandler,
     gh: GlobalsHandler,
     tab: Table
-  )
+  ) {
+    def fEnv = FunEnv(s, gh, tab)
+  }
 
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
@@ -66,11 +68,11 @@ trait CodeGeneration {
     }
   }
 
-  final protected def typeToConst(tpe: Type, const: Byte): Expr = tpe match {
-    case `i32` => I32Const(const)
-    case `i64` => I64Const(const)
-    case `f32` => F32Const(const)
-    case `f64` => F64Const(const)
+  final protected def typeToZero(tpe: Type): Expr = tpe match {
+    case `i32` => I32Const(0)
+    case `i64` => I64Const(0)
+    case `f32` => F32Const(0)
+    case `f64` => F64Const(0)
   }
 
   final protected def mkBin(op: BinOp, lhs: t.Expr, rhs: t.Expr)(implicit env: Env): Expr = {
@@ -133,6 +135,18 @@ trait CodeGeneration {
         // FIXME This is only ref. equality
         mkBin(EQ, lhs, rhs)
 
+      case bvl@t.BVLiteral(signed, value, size) =>
+        if (size <= 32) I32Const(bvl.toBigInt.toInt)
+        else I64Const(bvl.toBigInt.toLong)
+
+      case t.IntegerLiteral(value) =>
+        // TODO: Represent mathematical integers adequately
+        I64Const(
+          if (value.isValidLong) value.toLong
+          else if (value > Int.MaxValue) Int.MaxValue
+          else Int.MinValue
+        )
+
       case t.Record(tpe, fields) =>
         val formals = tpe.getRecord.definition.flattenFields
         mkRecord(tpe, fields.zip(formals) map { case (fd, formal) =>
@@ -191,7 +205,7 @@ trait CodeGeneration {
         e.getType match {
           case t.RealType() => Unary(neg, f64, transform(e))
           case tpe =>
-            Binary(sub, transform(tpe), typeToConst(transform(tpe), 0), transform(e))
+            Binary(sub, transform(tpe), typeToZero(transform(tpe)), transform(e))
         }
       case t.LessThan(lhs, rhs) =>
         mkBin(typeToOp(lhs, lt(_), lt), lhs, rhs)
@@ -204,7 +218,7 @@ trait CodeGeneration {
 
       case t.BVNot(e) =>
         val tpe = transform(e.getType)
-        Binary(xor, tpe, typeToConst(tpe, 0), transform(e))
+        Binary(xor, tpe, typeToZero(tpe), transform(e))
       case t.BVAnd(lhs, rhs) =>
         mkBin(and, lhs, rhs)
       case t.BVOr(lhs, rhs) =>
