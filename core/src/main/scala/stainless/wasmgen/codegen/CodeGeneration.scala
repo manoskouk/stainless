@@ -1,3 +1,5 @@
+/* Copyright 2009-2018 EPFL, Lausanne */
+
 package stainless
 package wasmgen
 package codegen
@@ -81,14 +83,14 @@ trait CodeGeneration {
 
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type
 
-  def transform(s: t.Symbols): Module = {
+  final def transform(s: t.Symbols): Module = {
     val globals = mkGlobals(s)
     val tab = mkTable(s)
     val funs = s.functions.values.toSeq map (transform(_)(FunEnv(s, GlobalsHandler(globals), tab)))
     Module("program", Seq(), globals, tab, funs)
   }
 
-  def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
+  final def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
     implicit val s = env.s
     FunDef(
       fd.id.uniqueName,

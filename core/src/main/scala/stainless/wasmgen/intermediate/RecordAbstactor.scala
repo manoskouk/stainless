@@ -390,7 +390,7 @@ private [wasmgen] class ExprTransformer
   * - Represent BigInts properly
   * - Implement type representations for composite types based on ADTs/ directly records
   */
-trait RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
+object RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
  
   def transform(sort: s.ADTSort, env: Env): (t.RecordADTSort, Seq[t.ConstructorSort]) = {
     val eqId = FreshIdentifier(s"eq${sort.id.name}")

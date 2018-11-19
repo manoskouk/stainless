@@ -1,3 +1,5 @@
+/* Copyright 2009-2018 EPFL, Lausanne */
+
 package stainless.wasmgen
 package codegen
 
@@ -12,7 +14,7 @@ import wasm.Definitions._
   * Global variable 0 points to the free linear memory boundary
   * 
   */
-class LinearMemoryCodeGen extends CodeGeneration {
+object LinearMemoryCodeGen extends CodeGeneration {
   private val memB = "memB"
 
   private def freshLabel(s: String) = FreshIdentifier(s).uniqueName
