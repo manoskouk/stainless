@@ -1,9 +1,11 @@
+/* Copyright 2009-2018 EPFL, Lausanne */
+
 package stainless.wasmgen.wasm
 
 // A structured document to be printed with nice indentation
 abstract class Document {
 
-  def <:>(other: Document) = Lined(List(this, other))
+  def <:>(other: Document) = Lined(Seq(this, other))
 
   def print: String = {
     val sb = new StringBuffer()
@@ -14,9 +16,6 @@ abstract class Document {
         sb append s
       case Indented(doc) =>
         rec(doc)(ind + 1, first)
-      case Unindented(doc) =>
-        assume(ind > 0)
-        rec(doc)(ind - 1, first)
       case Lined(Nil, _) => // skip
       case Lined(docs, sep) =>
         rec(docs.head)
@@ -39,11 +38,10 @@ abstract class Document {
   }
 }
 case class Indented(content: Document) extends Document
-case class Unindented(content: Document) extends Document
-case class Stacked(docs: List[Document], emptyLines: Boolean = false) extends Document
-case class Lined(docs: List[Document], separator: Document = Raw("")) extends Document
+case class Stacked(docs: Seq[Document], emptyLines: Boolean = false) extends Document
+case class Lined(docs: Seq[Document], separator: Document = Raw("")) extends Document
 case class Raw(s: String) extends Document
 
 object Stacked {
-  def apply(docs: Document*): Stacked = Stacked(docs.toList)
+  def apply(docs: Document*): Stacked = Stacked(docs.toSeq)
 }

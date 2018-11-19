@@ -1,3 +1,5 @@
+/* Copyright 2009-2018 EPFL, Lausanne */
+
 package stainless
 package wasmgen
 package wasm
@@ -17,7 +19,7 @@ case class Module(
 
   def writeWasmText(fileName: String): Unit = {
     val fw = new FileWriter(new File(fileName))
-    fw.write(ModulePrinter(this))
+    fw.write(Printer(this))
     fw.flush()
   }
 

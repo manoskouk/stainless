@@ -1,3 +1,5 @@
+/* Copyright 2009-2018 EPFL, Lausanne */
+
 package stainless.wasmgen.wasm
 
 import Types.Type

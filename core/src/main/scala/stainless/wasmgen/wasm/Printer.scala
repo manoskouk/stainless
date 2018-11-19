@@ -1,3 +1,5 @@
+/* Copyright 2009-2018 EPFL, Lausanne */
+
 package stainless.wasmgen.wasm
 
 import scala.language.implicitConversions
@@ -5,55 +7,75 @@ import Expressions._
 import Definitions._
 
 // Printer for Wasm modules
-object ModulePrinter {
+object Printer {
   private implicit def s2d(s: String) = Raw(s)
 
-  private def mkMod(mod: Module): Document = ??? /*Stacked(
-    "(module ",
-    Indented(Stacked(mod.imports map mkImport)),
-    Indented("(global (mut i32) i32.const 0) " * mod.globals),
-    Indented(Stacked(mod.functions map mkFun)),
-    ")"
-  )*/
+  private def doc(mod: Module): Document = {
+    val Module(name, imports, globals, table, functions) = mod
+    Stacked(
+      "(module ",
+      Indented(Stacked(imports map doc)),
+      Indented(Stacked(globals map doc)),
+      Indented(doc(table)),
+      Indented(Stacked(functions map doc)),
+      ")"
+    )
+  }
 
-  private def mkImport(s: String): Document =
-    Lined(List("(import ", s, ")"))
+  private def doc(g: ValDef): Document = {
+    s"(global $$${g.name} ${g.tpe})"
+  }
 
-  private def mkFun(fh: FunDef): Document = {
+  private def doc(t: Table): Document = {
+    s"(table anyfunc (elem ${t.funs.mkString(" ")} ))"
+  }
+
+  private def doc(imp: Import): Document = {
+    val Import(extModule, name, impType) = imp
+    val typeDoc: Document = impType match {
+      case FunSig(name, args, returnType) =>
+        s"(func $$$name ${args.map(arg => s"(param $arg) ").mkString} (result $returnType))"
+      case Memory(size) =>
+        s"(mem $size)"
+    }
+    s"""(import "$extModule" "$name" $typeDoc)"""
+  }
+
+  private def doc(fh: FunDef): Document = {
     val FunDef(name, args, returnType, locals, body) = fh
     val exportDoc: Document = s"""(export "$name" (func $$$name))"""
     val paramsDoc: Document =
-      Lined(args.toList map { case ValDef(name, tpe) =>
+      Lined(args map { case ValDef(name, tpe) =>
         Raw(s"(param $$$name $tpe) ")
       })
     val resultDoc: Document = s"(result $returnType) "
     val localsDoc: Document = 
-      Lined(locals.toList map { case ValDef(name, tpe) =>
+      Lined(locals map { case ValDef(name, tpe) =>
         Raw(s"(local $$$name $tpe) ")
       })
 
     Stacked(
       exportDoc,
-      Lined(List(s"(func $$$name ", paramsDoc, resultDoc, localsDoc)),
-      Indented(Stacked(mkExpr(body))),
+      Lined(Seq(s"(func $$$name ", paramsDoc, resultDoc, localsDoc)),
+      Indented(Stacked(doc(body))),
       ")"
     )
   }
 
 
-  private def mkExpr(expr: Expr): Document = {
+  private def doc(expr: Expr): Document = {
     expr match {
       case Binary(op, lhs, rhs) =>
         Stacked(
           s"(${expr.getType}.$op",
-          Indented(mkExpr(lhs)),
-          Indented(mkExpr(rhs)),
+          Indented(doc(lhs)),
+          Indented(doc(rhs)),
           ")"
         )
       case Unary(op, e) =>
         Stacked(
           s"(${expr.getType}.$op",
-          Indented(mkExpr(e)),
+          Indented(doc(e)),
           ")"
         )
       case I32Const(value) => s"(i32.const $value)"
@@ -63,40 +85,40 @@ object ModulePrinter {
       case If(label, cond, thenn, elze) =>
         Stacked(
           s"(if $$$label ${expr.getType}",
-          Indented(mkExpr(cond)),
-          Indented(mkExpr(thenn)),
-          Indented(mkExpr(elze)),
+          Indented(doc(cond)),
+          Indented(doc(thenn)),
+          Indented(doc(elze)),
           ")"
         )
       case Loop(label, body) =>
         Stacked(
           s"(loop $$$label ${expr.getType}",
-          Indented(mkExpr(body)),
+          Indented(doc(body)),
           ")"
         )
       case Branch(label, body) =>
         Stacked(
           s"(branch $$$label ${expr.getType}",
-          Indented(mkExpr(body)),
+          Indented(doc(body)),
           ")"
         )
       case Br(label) => s"(br $$$label)"
       case Br_If(label, cond) =>
         Stacked(
           s"(br_if $$$label",
-          Indented(mkExpr(cond)),
+          Indented(doc(cond)),
           ")"
         )
       case Call(name, _, args) =>
         Stacked(
           s"(call $$$name",
-          Indented(Stacked(args map mkExpr: _*)),
+          Indented(Stacked(args map doc: _*)),
           ")"
         )
       case Call_Indirect(_, fun, args) =>
         Stacked(
           "(call_indirect",
-          Indented(Stacked( (fun +: args) map mkExpr: _*)),
+          Indented(Stacked( (fun +: args) map doc: _*)),
           ")"
         )
       case Load(tpe, truncate, expr) =>
@@ -106,15 +128,16 @@ object ModulePrinter {
         }
         Stacked(
           s"($tpe.load$ts",
-          Indented(mkExpr(expr)),
+          Indented(doc(expr)),
           ")"
         )
       case Store(truncate, address, value) =>
         val ts = truncate.map(_.bitSize.toString).getOrElse("")
         Stacked(
           s"(${expr.getType}.store$ts",
-          Indented(mkExpr(address)),
-          Indented(mkExpr(value))
+          Indented(doc(address)),
+          Indented(doc(value)),
+          ")"
         )
       case Return => "return"
       case Unreachable => "unreachable"
@@ -123,40 +146,40 @@ object ModulePrinter {
       case SetLocal(label, value) =>
         Stacked(
           s"(set_local $$$label",
-          Indented(mkExpr(value)),
+          Indented(doc(value)),
           s")"
         )
       case GetGlobal(label) => s"(get_global $$$label)"
       case SetGlobal(label, value) =>
         Stacked(
           s"(set_global $$$label",
-          Indented(mkExpr(value)),
+          Indented(doc(value)),
           s")"
         )
       case Extend(to, sign, e) =>
         Stacked(
           s"($to.extend_$sign/${expr.getType}",
-          Indented(mkExpr(e)),
+          Indented(doc(e)),
           ")"
         )
       case Wrap(to, e) =>
         Stacked(
           s"($to.wrap/${expr.getType}",
-          Indented(mkExpr(e)),
+          Indented(doc(e)),
           ")"
         )
       case Sequence(es) =>
         Stacked(
           "(",
-          Indented(Stacked(es map mkExpr : _*)),
+          Indented(Stacked(es map doc : _*)),
           ")"
         )
     }
 
   }
 
-  def apply(mod: Module) = mkMod(mod).print
-  def apply(fh: FunDef) = mkFun(fh).print
-  def apply(expr: Expr) = mkExpr(expr).print
+  def apply(mod: Module) = doc(mod).print
+  def apply(fh: FunDef) = doc(fh).print
+  def apply(expr: Expr) = doc(expr).print
 
 }
