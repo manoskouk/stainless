@@ -178,11 +178,11 @@ trait CodeGeneration {
 
       case t.NewArray(length, base, init) =>
         mkNewArray(transform(length), transform(base), init map transform)
-      case ag@t.ArrayGet(array, index) =>
+      case ag@t.ArraySelect(array, index) =>
         mkArrayGet(transform(array), transform(ag.getType), transform(index))
       case t.ArraySet(array, index, value) =>
         mkArraySet(transform(array), transform(index), transform(value))
-      case t.ArrayLength32(array) =>
+      case t.ArrayLength(array) =>
         mkArrayLength(transform(array))
       case t.ArrayCopy(from, to, start, end) =>
         mkArrayCopy(transform(from.getType.asInstanceOf[t.ArrayType].base),

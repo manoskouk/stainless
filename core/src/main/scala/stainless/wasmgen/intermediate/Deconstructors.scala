@@ -50,25 +50,16 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
       (_, _, es, tps, _) => t.NewArray(es(0), tps.head, if (es.size > 1) Some(es(1)) else None)
     )
 
-    case s.ArrayGet(array, index) => (
-      NoIdentifiers, NoVariables, Seq(array, index), NoTypes, NoFlags,
-      (_, _, es, _, _) => t.ArrayGet(es(0), es(1))
-    )
-
     case s.ArraySet(array, index, value) => (
       NoIdentifiers, NoVariables, Seq(array, index, value), NoTypes, NoFlags,
       (_, _, es, _, _) => t.ArraySet(es(0), es(1), es(2))
-    )
-
-    case s.ArrayLength(array) => (
-      NoIdentifiers, NoVariables, Seq(array), NoTypes, NoFlags,
-      (_, _, es, _, _) => t.ArrayLength(es.head)
     )
 
     case s.ArrayCopy(from, to, start, end) => (
       NoIdentifiers, NoVariables, Seq(from, to, start, end), NoTypes, NoFlags,
       (_, _, es, _, _) => t.ArrayCopy(es(0), es(1), es(2), es(3))
     )
+
     case _ => super.deconstruct(expr)
   }
 

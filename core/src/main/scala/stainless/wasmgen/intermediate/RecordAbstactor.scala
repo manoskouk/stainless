@@ -249,12 +249,9 @@ private [wasmgen] class ExprTransformer
             case (index, elem) => ArraySet(arr, IndexLiteral(index), transform(elem, env))
           }.reduceRight(Sequence)
         )
-      case s.ArraySelect(array, index) =>
-        t.ArrayGet(transform(array, env), transform(index, env))
       case s.ArrayUpdated(array, index, value) =>
         // TODO: Copy functional arrays or analyze when we don't need to do so
         t.ArraySet(transform(array, env), transform(index, env), transform(value, env))
-      case s.ArrayLength(array) => ArrayLength32(transform(array, env))
 
       // Strings
       case s.StringLiteral(str) =>
@@ -272,10 +269,10 @@ private [wasmgen] class ExprTransformer
           Let(r.toVal, transform(rhs, env),
             Let(
               newArray.toVal,
-              NewArray(Plus(ArrayLength32(l), ArrayLength32(r)), ByteType(), None),
+              NewArray(Plus(ArrayLength(l), ArrayLength(r)), ByteType(), None),
               Sequence(
-                ArrayCopy(l, newArray, mkIndex(0), ArrayLength32(l)),
-                ArrayCopy(r, newArray, ArrayLength32(l), Plus(ArrayLength32(l), ArrayLength32(r)))
+                ArrayCopy(l, newArray, mkIndex(0), ArrayLength(l)),
+                ArrayCopy(r, newArray, ArrayLength(l), Plus(ArrayLength(l), ArrayLength(r)))
               )
             )))
       case s.SubString(expr, start, end) =>
@@ -286,7 +283,7 @@ private [wasmgen] class ExprTransformer
             ArrayCopy(transform(expr, env), NewArray(Minus(endV, startV), ByteType(), None), startV, endV) ))
 
       case s.StringLength(expr) =>
-        ArrayLength32(transform(expr, env))
+        ArrayLength(transform(expr, env))
 
       // Tuples
       case s.Tuple(exprs) => ???

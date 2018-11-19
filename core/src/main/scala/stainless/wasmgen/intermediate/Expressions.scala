@@ -60,23 +60,9 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
       else Untyped
   }
 
-  sealed case class ArrayGet(array: Expr, index: Expr) extends Expr {
-    def getType(implicit s: Symbols) = (array.getType, index.getType) match {
-      case (ArrayType(base), IndexType()) => base
-      case _ => Untyped
-    }
-  }
-  
   sealed case class ArraySet(array: Expr, index: Expr, value: Expr) extends Expr {
     def getType(implicit s: Symbols) = (array.getType, index.getType, value.getType) match {
       case (ArrayType(base1), IndexType(), base2) if base1 == base2 => UnitType()
-      case _ => Untyped
-    }
-  }
-
-  sealed case class ArrayLength32(array: Expr) extends Expr {
-    def getType(implicit s: Symbols) = array.getType match {
-      case ArrayType(_) => IndexType()
       case _ => Untyped
     }
   }
