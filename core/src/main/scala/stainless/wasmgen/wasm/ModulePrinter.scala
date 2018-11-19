@@ -62,7 +62,7 @@ object ModulePrinter {
       case F64Const(value) => s"(f64.const $value)"
       case If(label, cond, thenn, elze) =>
         Stacked(
-          s"(if $label ${expr.getType}",
+          s"(if $$$label ${expr.getType}",
           Indented(mkExpr(cond)),
           Indented(mkExpr(thenn)),
           Indented(mkExpr(elze)),
@@ -70,26 +70,26 @@ object ModulePrinter {
         )
       case Loop(label, body) =>
         Stacked(
-          s"(loop $label ${expr.getType}",
+          s"(loop $$$label ${expr.getType}",
           Indented(mkExpr(body)),
           ")"
         )
       case Branch(label, body) =>
         Stacked(
-          s"(branch $label ${expr.getType}",
+          s"(branch $$$label ${expr.getType}",
           Indented(mkExpr(body)),
           ")"
         )
-      case Br(label) => s"(br $label)"
+      case Br(label) => s"(br $$$label)"
       case Br_If(label, cond) =>
         Stacked(
-          s"(br_if $label",
+          s"(br_if $$$label",
           Indented(mkExpr(cond)),
           ")"
         )
       case Call(name, _, args) =>
         Stacked(
-          s"(call $name",
+          s"(call $$$name",
           Indented(Stacked(args map mkExpr: _*)),
           ")"
         )
