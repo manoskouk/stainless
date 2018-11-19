@@ -5,6 +5,7 @@ package stainless.wasmgen.intermediate
 import inox.ast.Identifier
 
 trait Expressions extends stainless.ast.Expressions { self: Trees =>
+
   sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr {
     def getType(implicit s: Symbols): Type = {
       checkParamTypes(fields, tpe.getRecord.flattenFields, tpe)
