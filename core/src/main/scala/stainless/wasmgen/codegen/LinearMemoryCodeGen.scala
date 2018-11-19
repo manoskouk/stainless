@@ -31,7 +31,7 @@ class LinearMemoryCodeGen extends CodeGeneration {
       exprs
         .zip(offsets)
         .map { case (e, off) =>
-          Store(e.getType, None, add(GetGlobal(memB), I32Const(off)), e)
+          Store(None, add(GetGlobal(memB), I32Const(off)), e)
         } :+
       SetGlobal(memB, add(GetGlobal(memB), I32Const(offsets.last)))
     )
@@ -68,16 +68,16 @@ class LinearMemoryCodeGen extends CodeGeneration {
     Sequence( Seq(
       GetGlobal(memB), // Leave the original memB, aka the pointer to the new array, on the bottom of the stack to be returned
       SetLocal(len, length),
-      Store(i32, None, GetGlobal(memB), GetLocal(len)),
+      Store(None, GetGlobal(memB), GetLocal(len)),
       SetLocal(ind, I32Const(0))
     ) ++ (init match {
       case Some(elem) =>
         val initL = lh.getFreshLocal(freshLabel("init"), base)
         Seq(
           SetLocal(initL, elem),
-          Branch(loop, void, Sequence(Seq(
+          Branch(loop, Sequence(Seq(
             Br_If(loop, ge(GetLocal(ind), GetLocal(len))),
-            Store(base, None, indToPtr(GetLocal(ind)), GetLocal(initL)),
+            Store(None, indToPtr(GetLocal(ind)), GetLocal(initL)),
             SetLocal(ind, add(GetLocal(ind), I32Const(1)))
           )))
         )
@@ -97,7 +97,7 @@ class LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr = {
     Store(
-      value.getType, None,
+      None,
       add(array, add(I32Const(4), mul(index, I32Const(value.getType.size)))),
       value
     )
@@ -139,7 +139,7 @@ class LinearMemoryCodeGen extends CodeGeneration {
     implicit val gh = env.gh
     Sequence( Seq(
       GetGlobal(memB), // Leave the original memB, aka the pointer to the new boxed value, on the bottom of the stack to be returned
-      Store(expr.getType, None, GetGlobal(memB), expr),
+      Store(None, GetGlobal(memB), expr),
       SetGlobal(memB, add(GetGlobal(memB), I32Const(expr.getType.size)))
     ))
   }

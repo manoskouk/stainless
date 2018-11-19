@@ -21,7 +21,7 @@ object Expressions { self =>
   }
 
   abstract class UnOp {
-    def apply(e1: Expr) = Unary(this, e1.getType, e1)
+    def apply(e1: Expr) = Unary(this, e1)
   }
   // Int only
   case object eqz extends UnOp with RelOp // Return 1 if operand is 0, 0 otherwise
@@ -33,7 +33,7 @@ object Expressions { self =>
 
 
   abstract class BinOp {
-    def apply(e1: Expr, e2: Expr) = Binary(this, e1.getType, e1, e2)
+    def apply(e1: Expr, e2: Expr) = Binary(this, e1, e2)
   }
 
   // mk: This is a little hacky since we use the same names for multiple operations but oh well
@@ -67,19 +67,19 @@ object Expressions { self =>
   case object gt extends BinOp with RelOp
   case object ge extends BinOp with RelOp
 
-  abstract class Expr { def getType: Type }
+  abstract class Expr { val getType: Type }
 
   // Operators
-  case class Binary(op: BinOp, tpe: Type, lhs: Expr, rhs: Expr) extends Expr {
+  case class Binary(op: BinOp, lhs: Expr, rhs: Expr) extends Expr {
     val getType = op match {
       case _: RelOp => i32
-      case _ => tpe
+      case _ => lhs.getType
     }
   }
-  case class Unary(op: UnOp, tpe: Type, expr: Expr) extends Expr {
+  case class Unary(op: UnOp, expr: Expr) extends Expr {
     val getType = op match {
       case _: RelOp => i32
-      case _ => tpe
+      case _ => expr.getType
     }
   }
 
@@ -98,16 +98,16 @@ object Expressions { self =>
   case class F64Const(value: Double)  extends Expr { val getType = f64 }
 
   // Control instructions
-  case class If(label: Label, tpe: Type, cond: Expr, thenn: Expr, elze: Expr) extends Expr {
-    val getType = tpe 
+  case class If(label: Label, cond: Expr, thenn: Expr, elze: Expr) extends Expr {
+    val getType = thenn.getType
   }
   // A block of instructions with a label at the beginning
-  case class Loop(label: Label, tpe: Type, body: Expr) extends Expr {
-    val getType = tpe
+  case class Loop(label: Label, body: Expr) extends Expr {
+    val getType = body.getType
   }
   // A block of instructions with a label at the end
-  case class Branch(label: Label, tpe: Type, body: Expr) extends Expr {
-    val getType = tpe
+  case class Branch(label: Label, body: Expr) extends Expr {
+    val getType = body.getType
   }
   // Jump to "label", which MUST be the label of an enclosing structure
   case class Br(label: Label) extends Expr {
@@ -130,7 +130,7 @@ object Expressions { self =>
     val getType = void
   }
   case object Return extends Expr {
-    val getType = void 
+    val getType = void
   }
   case object Unreachable extends Expr {
     val getType = void
@@ -139,8 +139,8 @@ object Expressions { self =>
   case class Load(tpe: Type, truncate: Option[(Type,Sign)], address: Expr) extends Expr {
     val getType = truncate.map(_._1).getOrElse(tpe)
   }
-  
-  case class Store(tpe: Type, truncate: Option[Type], address: Expr, value: Expr) extends Expr {
+
+  case class Store(truncate: Option[Type], address: Expr, value: Expr) extends Expr {
     val getType = void
   }
 
@@ -161,6 +161,7 @@ object Expressions { self =>
 
   case class Sequence(es: Seq[Expr]) extends Expr {
     val getType = es.map(_.getType).filter(_ != void) match {
+      case Seq() => void
       case Seq(tpe) => tpe
       case other => sys.error("Sequence containing multiple values with non-void types")
     }

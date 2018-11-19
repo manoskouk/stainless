@@ -43,16 +43,16 @@ object ModulePrinter {
 
   private def mkExpr(expr: Expr): Document = {
     expr match {
-      case Binary(op, tpe, lhs, rhs) =>
+      case Binary(op, lhs, rhs) =>
         Stacked(
-          s"($tpe.$op",
+          s"(${expr.getType}.$op",
           Indented(mkExpr(lhs)),
           Indented(mkExpr(rhs)),
           ")"
         )
-      case Unary(op, tpe, e) =>
+      case Unary(op, e) =>
         Stacked(
-          s"($tpe.$op",
+          s"(${expr.getType}.$op",
           Indented(mkExpr(e)),
           ")"
         )
@@ -60,23 +60,23 @@ object ModulePrinter {
       case I64Const(value) => s"(i64.const $value)"
       case F32Const(value) => s"(f32.const $value)"
       case F64Const(value) => s"(f64.const $value)"
-      case If(label, tpe, cond, thenn, elze) =>
+      case If(label, cond, thenn, elze) =>
         Stacked(
-          s"(if $label $tpe",
+          s"(if $label ${expr.getType}",
           Indented(mkExpr(cond)),
           Indented(mkExpr(thenn)),
           Indented(mkExpr(elze)),
           ")"
         )
-      case Loop(label, tpe, body) =>
+      case Loop(label, body) =>
         Stacked(
-          s"(loop $label $tpe",
+          s"(loop $label ${expr.getType}",
           Indented(mkExpr(body)),
           ")"
         )
-      case Branch(label, tpe, body) =>
+      case Branch(label, body) =>
         Stacked(
-          s"(branch $label $tpe",
+          s"(branch $label ${expr.getType}",
           Indented(mkExpr(body)),
           ")"
         )
@@ -109,10 +109,10 @@ object ModulePrinter {
           Indented(mkExpr(expr)),
           ")"
         )
-      case Store(tpe, truncate, address, value) =>
+      case Store(truncate, address, value) =>
         val ts = truncate.map(_.bitSize.toString).getOrElse("")
         Stacked(
-          s"($tpe.store$ts",
+          s"(${expr.getType}.store$ts",
           Indented(mkExpr(address)),
           Indented(mkExpr(value))
         )

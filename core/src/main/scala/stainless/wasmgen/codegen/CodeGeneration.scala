@@ -126,7 +126,6 @@ trait CodeGeneration {
       case t.IfExpr(cond, thenn, elze) =>
         If(
           FreshIdentifier("label").uniqueName,
-          transform(thenn.getType),
           transform(cond),
           transform(thenn),
           transform(elze)
@@ -203,9 +202,9 @@ trait CodeGeneration {
         mkBin(rem(typeToSign(lhs)), lhs, rhs) // FIXME
       case t.UMinus(e) =>
         e.getType match {
-          case t.RealType() => Unary(neg, f64, transform(e))
+          case t.RealType() => Unary(neg, transform(e))
           case tpe =>
-            Binary(sub, transform(tpe), typeToZero(transform(tpe)), transform(e))
+            Binary(sub, typeToZero(transform(tpe)), transform(e))
         }
       case t.LessThan(lhs, rhs) =>
         mkBin(typeToOp(lhs, lt(_), lt), lhs, rhs)
@@ -217,8 +216,7 @@ trait CodeGeneration {
         mkBin(typeToOp(lhs, ge(_), ge), lhs, rhs)
 
       case t.BVNot(e) =>
-        val tpe = transform(e.getType)
-        Binary(xor, tpe, typeToZero(tpe), transform(e))
+        Binary(xor, typeToZero(transform(e.getType)), transform(e))
       case t.BVAnd(lhs, rhs) =>
         mkBin(and, lhs, rhs)
       case t.BVOr(lhs, rhs) =>
