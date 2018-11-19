@@ -84,10 +84,10 @@ object Expressions { self =>
   }
 
   // Int-Int Conversions
-  case class Extend(from: Type, to: Type, sign: Sign, e: Expr) extends Expr {
+  case class Extend(to: Type, sign: Sign, e: Expr) extends Expr {
     val getType = to
   }
-  case class Wrap(from: Type, to: Type, e: Expr) extends Expr {
+  case class Wrap(to: Type, e: Expr) extends Expr {
     val getType = to
   }
 

@@ -230,9 +230,9 @@ trait CodeGeneration {
       case t.BVLShiftRight(lhs, rhs) =>
         mkBin(shr(Unsigned), lhs, rhs)
       case t.BVNarrowingCast(expr, newType) =>
-        Wrap(transform(newType), transform(expr.getType), transform(expr))
+        Wrap(transform(newType), transform(expr))
       case t.BVWideningCast(expr, newType) =>
-        Extend(transform(newType), transform(expr.getType), typeToSign(expr.getType), transform(expr))
+        Extend(transform(newType), typeToSign(expr.getType), transform(expr))
     }
   }
 }

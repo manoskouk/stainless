@@ -133,15 +133,15 @@ object ModulePrinter {
           Indented(mkExpr(value)),
           s")"
         )
-      case Extend(to, from, sign, e) =>
+      case Extend(to, sign, e) =>
         Stacked(
-          s"($to.extend_$sign/$from",
+          s"($to.extend_$sign/${expr.getType}",
           Indented(mkExpr(e)),
           ")"
         )
-      case Wrap(to, from, e) =>
+      case Wrap(to, e) =>
         Stacked(
-          s"($to.wrap/$from",
+          s"($to.wrap/${expr.getType}",
           Indented(mkExpr(e)),
           ")"
         )
