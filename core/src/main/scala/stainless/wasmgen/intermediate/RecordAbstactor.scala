@@ -1,8 +1,9 @@
 /* Copyright 2009-2018 EPFL, Lausanne */
 
-package stainless.wasmgen.intermediate
+package stainless.wasmgen
+package intermediate
 
-import stainless.{Identifier, FreshIdentifier}
+import stainless.{FreshIdentifier, Identifier}
 
 trait Transformer extends stainless.transformers.Transformer {
   val s = stainless.trees
@@ -11,6 +12,7 @@ trait Transformer extends stainless.transformers.Transformer {
   type Env = s.Symbols
 
   override def transform(tp: s.Type, env: s.Symbols): t.Type = {
+    implicit val impEnv = env
     import t._
     tp match {
       case s.Untyped => Untyped
@@ -23,20 +25,24 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.ADTType(id, tps) =>
         RecordType(id, tps map (transform(_, env)))
 
-      case s.TupleType(bases) => ??? // TODO
+      case s.TupleType(bases) =>
+        RecordType(
+          env.lookup[s.ADTSort](s"Tuple${bases.size}").id,
+          bases map ( tp => transform(tp.getType, env))
+        )
       case s.SetType(base) => ???
       case s.BagType(base) => ???
       case s.MapType(from, to) => ???
 
       case s.PiType(params, to) =>
         FunctionType(
-          params.map(p => transform(p.getType(env), env)),
-          transform(to.getType(env), env)
+          params.map(p => transform(p.getType, env)),
+          transform(to.getType, env)
         )
       case s.SigmaType(params, to) =>
-        transform(s.TupleType(params.map(_.getType(env)) :+ to.getType(env)), env)
+        transform(s.TupleType(params.map(_.getType) :+ to.getType(env)), env)
       case s.RefinementType(vd, prop) =>
-        transform(vd.getType(env), env)
+        transform(vd.getType, env)
 
       // These remain as is
       // case s.RealType() =>  TODO: We will represent Reals as floats (?)
@@ -109,7 +115,16 @@ private [wasmgen] class ExprTransformer
       case s.Error(tpe, description) =>
         Sequence(Output(transform(s.StringLiteral(description), env)), NoTree(transform(tpe, env)))
       case me: s.MatchExpr => sym.matchToIfThenElse(transform(me, env))
-      // case s.Equals(lhs, rhs) => ??? // FIXME: implement equality for all types
+      case s.Equals(lhs, rhs) =>
+        val tl = transform(lhs, env)
+        val tr = transform(rhs, env)
+        tl.getType match {
+          case t.RecordType(record, tps) =>
+            val eqFun = sym.getRecord(record).flags.collectFirst{ case HasADTEquality(id) => id }.get
+            FunctionInvocation(eqFun, tps, Seq(tl, tr))
+          case _ =>
+            Equals(tl, tr)  // TODO: This will cover numeric types and arrays
+        }
 
       // Contracts
       case s.Assume(pred, body) =>
@@ -280,14 +295,25 @@ private [wasmgen] class ExprTransformer
         val endV = Variable.fresh("end", IndexType())
         Let(startV.toVal, transform(start, env),
           Let(endV.toVal, transform(end, env),
-            ArrayCopy(transform(expr, env), NewArray(Minus(endV, startV), ByteType(), None), startV, endV) ))
+            ArrayCopy(
+              transform(expr, env),
+              NewArray(Minus(endV, startV), ByteType(), None),
+              startV,
+              endV ) ))
 
       case s.StringLength(expr) =>
         ArrayLength(transform(expr, env))
 
       // Tuples
-      case s.Tuple(exprs) => ???
-      case s.TupleSelect(tuple, index) => ???
+      case s.Tuple(exprs) =>
+        transform(s.ADT(
+          env.lookup[s.ADTSort](s"Tuple${exprs.size}").id,
+          exprs map (_.getType), exprs
+        ), env)
+      case s.TupleSelect(tuple, index) =>
+        val size = tuple.getType.asInstanceOf[s.TupleType].bases.size
+        val id = env.lookup[s.ADTSort](s"Tuple$size").constructors(index - 1).id
+        transform(s.ADTSelector(tuple, id), env)
 
       // Sets
       case s.FiniteSet(elements, base) => ???
@@ -366,10 +392,13 @@ private [wasmgen] class ExprTransformer
   */
 trait RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
  
-  def transform(sort: s.ADTSort, env: Env): Seq[t.RecordSort] = {
+  def transform(sort: s.ADTSort, env: Env): (t.RecordADTSort, Seq[t.ConstructorSort]) = {
+    val eqId = FreshIdentifier(s"eq${sort.id.name}")
+
     val parent = new t.RecordADTSort(
       transform(sort.id, env),
-      sort.tparams map (transform(_, env))
+      sort.tparams map (transform(_, env)),
+      eqId
     ).copiedFrom(sort)
 
     val children = sort.constructors.zipWithIndex map { case (cons, ind) =>
@@ -382,24 +411,83 @@ trait RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
       ).copiedFrom(cons)
     }
 
-    parent +: children
+    (parent, children)
   }
 
-  def transform(syms: s.Symbols): t.Symbols = {
-    val initSymbols = t.Symbols(
-      syms.sorts flatMap { case (id, sort) =>
-        transform(sort, syms) map (record => record.id -> record)
-      },
-      Map()     
+  private def mkEquality(
+    sort: t.RecordADTSort,
+    children: Seq[t.ConstructorSort],
+    sortsToEqs: Map[Identifier, Identifier]
+  )(implicit syms: t.Symbols): t.FunDef = {
+    import t._
+    def genEq(e1: Expr, e2: Expr): Expr = e1.getType match {
+      case RecordType(id, tps) => FunctionInvocation(sortsToEqs(id), tps, Seq(e1, e2))
+      case _ => Equals(e1, e2)
+    }
+    def cse(child: ConstructorSort)(v1: Variable, v2: Variable) = {
+      val ff = child.flattenFields
+      val code = ff.head.id
+      val fields = ff.tail.map(_.id)
+      And(Seq(
+        Equals(RecordSelector(v1, code), Int32Literal(child.code)),
+        Equals(RecordSelector(v2, code), Int32Literal(child.code))
+      ) ++
+        fields.map(fld => genEq(RecordSelector(v1, fld), RecordSelector(v2, fld)))
+      )
+    }
+    val dsl = new inox.ast.DSL { val trees: t.type = t }
+    dsl.mkFunDef(sortsToEqs(sort.id))(sort.tparams.map(_.id.name): _*)( tps =>
+      (
+        Seq (
+          ValDef(FreshIdentifier("v1"), RecordType(sort.id, tps)),
+          ValDef(FreshIdentifier("v2"), RecordType(sort.id, tps)) ),
+        BooleanType(),
+        { case Seq(v1, v2) => Or(children map (cse(_)(v1, v2))) }
+      )
+    )
+  }
+
+  private def mkTupleSort(size: Int): s.ADTSort = {
+    require(size >= 2)
+    val dsl = new inox.ast.DSL { val trees: s.type = s }
+    val name = FreshIdentifier(s"Tuple$size")
+    dsl.mkSort(name)( (1 to size).map(ind => s"T$ind") : _* )( tps =>
+      Seq((name,
+        tps.zipWithIndex.map { case (tpe, ind) =>
+          s.ValDef(FreshIdentifier(s"_${ind+1}"), tpe)
+        }
+      ))
     )
 
+  }
+
+  def transform(syms0: s.Symbols): t.Symbols = {
+    // (0) Make tuple sorts
+    val syms = syms0.withSorts((2 to 8).map(mkTupleSort))
+
+    // (1.1) Transform sorts
+    val sorts = syms.sorts.values.toSeq.map(transform(_, syms))
+    val allSorts = sorts.flatMap(s => s._1 +: s._2).map(s => s.id -> s).toMap
+
+    // (1.2) These are the program types (initial symbols)
+    val initSymbols = t.Symbols(allSorts, Map())
+
+    // (2.1) Make equalities for sorts
+    val eqsMap = sorts.map(s => s._1.id -> s._1.flags.collectFirst{ case t.HasADTEquality(id) => id }.get).toMap
+    val equalities = sorts
+      .map { case (sort, constructors) => mkEquality(sort, constructors, eqsMap)(initSymbols)}
+      .map(f => f.id -> f)
+      .toMap
+
+    // (2.2) Transform functions in program
     val manager = new SymbolsManager
     val tr = new ExprTransformer(manager, keepContracts = true, syms)(initSymbols)
     val funs = syms.functions mapValues tr.transform
 
+    // (3.1) Put it all together
     t.Symbols(
       initSymbols.records ++ manager.newRecords,
-      funs ++ manager.newFunctions
+      equalities ++ funs ++ manager.newFunctions
     )
   }
 }

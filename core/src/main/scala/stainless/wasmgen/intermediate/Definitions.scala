@@ -31,11 +31,10 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     val id: Identifier,
     val tparams: Seq[TypeParameterDef],
     val parent: Option[Identifier],
-    val fields: Seq[ValDef]
+    val fields: Seq[ValDef],
+    val flags: Seq[Flag] = Seq()
   ) extends Definition {
     assert(parent.isEmpty || tparams.isEmpty)
-
-    val flags = Seq()
 
     def typeArgs: Seq[TypeParameter] = tparams.map(_.tp)
 
@@ -84,8 +83,8 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])
     extends RecordSort(FreshIdentifier("closure"), Seq(), Some(parent), env)
 
-  sealed class RecordADTSort(id: Identifier, tparams: Seq[TypeParameterDef])
-    extends RecordSort(id, tparams, None, Seq(ValDef(adtCodeID, BVType(signed = false, 32)) )) // TODO: Fix type
+  sealed class RecordADTSort(id: Identifier, tparams: Seq[TypeParameterDef], equality: Identifier)
+    extends RecordSort(id, tparams, None, Seq(ValDef(adtCodeID, BVType(signed = false, 32)) ), Seq(HasADTEquality(equality))) // TODO: Fix type
 
   sealed class ConstructorSort(
     id: Identifier,

@@ -131,7 +131,6 @@ trait CodeGeneration {
           transform(elze)
         )
       case t.Equals(lhs, rhs) =>
-        // FIXME This is only ref. equality
         mkBin(EQ, lhs, rhs)
 
       case bvl@t.BVLiteral(signed, value, size) =>
