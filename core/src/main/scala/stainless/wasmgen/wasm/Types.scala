@@ -3,7 +3,7 @@ package stainless.wasmgen.wasm
 object Types {
   trait Type {
     val size: Int
-    val bitSize = size * 8
+    def bitSize: Int = size * 8
   }
   case object i32 extends Type { val size = 4 }
   case object i64 extends Type { val size = 8 }

@@ -159,6 +159,7 @@ object Expressions { self =>
     val getType = void
   }
 
+  // A sequence of instructions, 0 or 1 of which is allowed to leave a value in memory
   case class Sequence(es: Seq[Expr]) extends Expr {
     val getType = es.map(_.getType).filter(_ != void) match {
       case Seq() => void
