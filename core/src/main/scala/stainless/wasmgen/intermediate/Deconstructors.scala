@@ -6,6 +6,7 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
   protected val s: Trees
   protected val t: Trees
 
+  // Reminder:
   // protected type Deconstructed[T <: t.Tree] = (Seq[Identifier], Seq[s.Variable], Seq[s.Expr], Seq[s.Type], Seq[s.Flag], Builder[T])
   // protected type Builder[T <: t.Tree] = (Seq[Identifier], Seq[t.Variable], Seq[t.Expr], Seq[t.Type], Seq[t.Flag]) => T
 
