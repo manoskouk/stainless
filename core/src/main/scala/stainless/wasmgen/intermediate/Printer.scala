@@ -16,6 +16,8 @@ trait Printer extends stainless.ast.Printer {
 
     case CastUp(e, tp) => p"$e.asInstanceOf[$tp]"
 
+    case EqualsI32(lhs, rhs) => p"$lhs == $rhs"
+
     case Output(msg) => p"println($msg)"
 
     case NewArray(length, base, init) => p"new Array[$base]($length){ ${init.getOrElse("")} }"
@@ -25,6 +27,14 @@ trait Printer extends stainless.ast.Printer {
 
     case RecordType(id, tps) =>
       p"$id${nary(tps, ", ", "[", "]")}"
+
+    case rs: RecordSort =>
+      p"struct ${rs.id}${nary(rs.tparams, ", ", "[", "]")} "
+      rs.parent foreach { par => p"extends $par " }
+      p"${nary(rs.fields, ", ", "(", ")")}"
+
+    case trs: TypedRecordSort =>
+      p"typed ${trs.definition.id} ${nary(trs.tps, ", ", "[", "]")}"
 
     case _ => super.ppBody(tree)
   }

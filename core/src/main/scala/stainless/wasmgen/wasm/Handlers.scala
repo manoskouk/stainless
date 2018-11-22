@@ -16,7 +16,7 @@ class LocalsHandler(args: Seq[ValDef]) {
     locals_ :+= ValDef(l, tpe)
     l
   }
-  def getType(l: Label): Type = locals.find(_.name == l).get.tpe
+  def getType(l: Label): Type = locals_.find(_.name == l).get.tpe
   private[wasmgen] def locals: Seq[ValDef] = {
     locals_.drop(args.size)
   }

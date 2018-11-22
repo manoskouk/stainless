@@ -170,4 +170,12 @@ object Expressions { self =>
     }
   }
 
+  // Helpers
+  def typeToZero(tpe: Type): Expr = tpe match {
+    case `i32` => I32Const(0)
+    case `i64` => I64Const(0)
+    case `f32` => F32Const(0)
+    case `f64` => F64Const(0)
+  }
+
 }

@@ -29,6 +29,7 @@ trait CodeGeneration {
     def fEnv = FunEnv(s, gh, tab)
   }
 
+  protected def mkImports(symbols: t.Symbols): Seq[Import]
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
 
@@ -70,13 +71,6 @@ trait CodeGeneration {
     }
   }
 
-  final protected def typeToZero(tpe: Type): Expr = tpe match {
-    case `i32` => I32Const(0)
-    case `i64` => I64Const(0)
-    case `f32` => F32Const(0)
-    case `f64` => F64Const(0)
-  }
-
   final protected def mkBin(op: BinOp, lhs: t.Expr, rhs: t.Expr)(implicit env: Env): Expr = {
     op(transform(lhs), transform(rhs))
   }
@@ -84,10 +78,11 @@ trait CodeGeneration {
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type
 
   final def transform(s: t.Symbols): Module = {
+    val imports = mkImports(s)
     val globals = mkGlobals(s)
     val tab = mkTable(s)
     val funs = s.functions.values.toSeq map (transform(_)(FunEnv(s, GlobalsHandler(globals), tab)))
-    Module("program", Seq(), globals, tab, funs)
+    Module("program", imports, globals, tab, funs)
   }
 
   final def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
@@ -108,7 +103,8 @@ trait CodeGeneration {
       case t.NoTree(tpe) =>
         Unreachable
       case t.Variable(id, tpe, flags) =>
-        GetLocal(id.uniqueName)
+        val toLook = id.uniqueName
+        GetLocal(toLook)
       case t.Let(vd, value, body) =>
         lh.getFreshLocal(vd.id.uniqueName, transform(vd.getType))
         Sequence(Seq(
@@ -132,7 +128,7 @@ trait CodeGeneration {
           transform(thenn),
           transform(elze)
         )
-      case t.Equals(lhs, rhs) =>
+      case t.EqualsI32(lhs, rhs) =>
         mkBin(EQ, lhs, rhs)
 
       case bvl@t.BVLiteral(signed, value, size) =>

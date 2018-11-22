@@ -123,7 +123,7 @@ private [wasmgen] class ExprTransformer
             val eqFun = sym.getRecord(record).flags.collectFirst{ case HasADTEquality(id) => id }.get
             FunctionInvocation(eqFun, tps, Seq(tl, tr))
           case _ =>
-            Equals(tl, tr)  // TODO: This will cover numeric types and arrays
+            EqualsI32(tl, tr)  // TODO: This will cover numeric types and arrays
         }
 
       // Contracts
@@ -235,7 +235,7 @@ private [wasmgen] class ExprTransformer
       case s.IsConstructor(expr, id) =>
         // We need to compare the constructor code of given value
         // to the code corresponding to constructor 'id'
-        Equals(
+        EqualsI32(
           RecordSelector(transform(expr, env), adtCodeID),
           mkIndex(sym.getRecord(id).asInstanceOf[ConstructorSort].code)
         )
@@ -419,21 +419,25 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
     children: Seq[t.ConstructorSort],
     sortsToEqs: Map[Identifier, Identifier]
   )(implicit syms: t.Symbols): t.FunDef = {
+    val codeId = sort.fields.head.id
     import t._
-    def genEq(e1: Expr, e2: Expr): Expr = e1.getType match {
-      case RecordType(id, tps) => FunctionInvocation(sortsToEqs(id), tps, Seq(e1, e2))
-      case _ => Equals(e1, e2)
+    def genEq(e1: Expr, e2: Expr): Expr = {
+      e1.getType match {
+        case RecordType(id, tps) => FunctionInvocation(sortsToEqs(id), tps, Seq(e1, e2))
+        case _ => EqualsI32(e1, e2)
+      }
     }
     def cse(child: ConstructorSort)(v1: Variable, v2: Variable) = {
+      val tparams = v1.getType.asInstanceOf[RecordType].tps
       val ff = child.flattenFields
-      val code = ff.head.id
       val fields = ff.tail.map(_.id)
-      And(Seq(
-        Equals(RecordSelector(v1, code), Int32Literal(child.code)),
-        Equals(RecordSelector(v2, code), Int32Literal(child.code))
-      ) ++
-        fields.map(fld => genEq(RecordSelector(v1, fld), RecordSelector(v2, fld)))
-      )
+      (
+        EqualsI32(RecordSelector(v1, codeId), Int32Literal(child.code)) +:
+        fields.map(fld => genEq(
+          RecordSelector(CastDown(v1, RecordType(child.id, tparams)), fld),
+          RecordSelector(CastDown(v2, RecordType(child.id, tparams)), fld)
+        ))
+      ).reduceLeft(BVAnd)
     }
     val dsl = new inox.ast.DSL { val trees: t.type = t }
     dsl.mkFunDef(sortsToEqs(sort.id))(sort.tparams.map(_.id.name): _*)( tps =>
@@ -441,8 +445,19 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
         Seq (
           ValDef(FreshIdentifier("v1"), RecordType(sort.id, tps)),
           ValDef(FreshIdentifier("v2"), RecordType(sort.id, tps)) ),
-        BooleanType(),
-        { case Seq(v1, v2) => Or(children map (cse(_)(v1, v2))) }
+        IndexType(),
+        { case Seq(v1, v2) =>
+          val codesAreEq = EqualsI32(RecordSelector(v1, codeId), RecordSelector(v2, codeId))
+          if (children.isEmpty) {
+            codesAreEq
+          } else {
+            BVAnd(
+              codesAreEq,
+              children.map(cse(_)(v1, v2)).reduceLeft(BVOr)
+            )
+          }
+
+        }
       )
     )
   }
@@ -450,9 +465,10 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
   private def mkTupleSort(size: Int): s.ADTSort = {
     require(size >= 2)
     val dsl = new inox.ast.DSL { val trees: s.type = s }
-    val name = FreshIdentifier(s"Tuple$size")
-    dsl.mkSort(name)( (1 to size).map(ind => s"T$ind") : _* )( tps =>
-      Seq((name,
+    val sortName = FreshIdentifier(s"Tuple$size")
+    val constrName = FreshIdentifier(s"Tuple${size}C")
+    dsl.mkSort(sortName)( (1 to size).map(ind => s"T$ind") : _* )( tps =>
+      Seq((constrName,
         tps.zipWithIndex.map { case (tpe, ind) =>
           s.ValDef(FreshIdentifier(s"_${ind+1}"), tpe)
         }
@@ -485,10 +501,13 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
     val funs = syms.functions mapValues tr.transform
 
     // (3.1) Put it all together
-    t.Symbols(
+    val ret = t.Symbols(
       initSymbols.records ++ manager.newRecords,
       equalities ++ funs ++ manager.newFunctions
     )
+
+    // println(ret)
+    ret
   }
 }
 

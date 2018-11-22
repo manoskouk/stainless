@@ -36,6 +36,11 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
       (_, _, es, tps, _) => t.CastUp(es.head, tps.head.asInstanceOf[t.RecordType])
     )
 
+    case s.EqualsI32(lhs, rhs) => (
+      NoIdentifiers, NoVariables, Seq(lhs, rhs), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.EqualsI32(es(0), es(1))
+    )
+
     case s.Output(msg) => (
       NoIdentifiers, NoVariables, Seq(msg), NoTypes, NoFlags,
       (_, _, es, _, _) => t.Output(es.head)
@@ -75,4 +80,17 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
 
 trait Deconstructors extends stainless.ast.Deconstructors { self: Trees =>
   // FIXME: What do I have to override here?
+
+  override def getDeconstructor(that: inox.ast.Trees): inox.ast.TreeDeconstructor { val s: self.type; val t: that.type } = that match {
+    case tree: Trees => new TreeDeconstructor {
+      protected val s: self.type = self
+      protected val t: tree.type = tree
+    }.asInstanceOf[TreeDeconstructor { val s: self.type; val t: that.type }]
+
+    case _ => super.getDeconstructor(that)
+  }
+
+  override val deconstructor: TreeDeconstructor { val s: self.type; val t: self.type } = {
+    getDeconstructor(self).asInstanceOf[TreeDeconstructor { val s: self.type; val t: self.type }]
+  }
 }

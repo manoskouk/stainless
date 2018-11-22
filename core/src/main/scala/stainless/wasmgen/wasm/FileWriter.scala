@@ -102,9 +102,9 @@ class FileWriter(module: Module) {
     val (local, inPath) = {
       import Env._
       os match {
-        case Linux   => ("./bin/wat2wasm",     "wat2wasm")
-        case Windows => ("./bin/wat2wasm.exe", "wat2wasm.exe")
-        case Mac     => ("./bin/mac/wat2wasm", "wat2wasm")
+        case Linux   => ("./unmanaged/wasm/wat2wasm",     "wat2wasm")
+        case Windows => ("./unmanaged/wasm/wat2wasm.exe", "wat2wasm.exe")
+        case Mac     => ("./unmanaged/wasm/mac/wat2wasm", "wat2wasm")
       }
     }
 
@@ -127,7 +127,7 @@ class FileWriter(module: Module) {
     } catch {
       case _: IOException =>
         ctx.reporter.fatalError(
-          "wat2wasm utility was not found under ./bin or in system path, " +
+          "wat2wasm utility was not found under expected directory or in system path, " +
           "or did not have permission to execute"
         )
       case _: RuntimeException =>

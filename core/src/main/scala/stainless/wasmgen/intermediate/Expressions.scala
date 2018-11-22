@@ -16,9 +16,11 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     override protected def computeType(implicit s: Symbols) = {
       record.getType match {
         case RecordType(id, tps) =>
-          val typedRec = s.getRecord(id, tps)
-          typedRec.flattenFields.find(_.id == id).get.tpe
-        case _ => Untyped
+          s.getRecord(id, tps).flattenFields
+           .find(_.id == selector).get
+           .tpe
+        case _ =>
+          Untyped
       }
     }
   }
@@ -53,6 +55,14 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
   sealed case class Sequence(e1: Expr, e2: Expr) extends Expr {
     def getType(implicit s: Symbols) = e2.getType
+  }
+
+  /** $encodingof `... == ...` */
+  sealed case class EqualsI32(lhs: Expr, rhs: Expr) extends Expr with CachingTyped {
+    override protected def computeType(implicit s: Symbols): Type = {
+      if (lhs.getType == rhs.getType) IndexType()
+      else Untyped
+    }
   }
 
   sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {

@@ -34,7 +34,6 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     val fields: Seq[ValDef],
     val flags: Seq[Flag] = Seq()
   ) extends Definition {
-    assert(parent.isEmpty || tparams.isEmpty)
 
     def typeArgs: Seq[TypeParameter] = tparams.map(_.tp)
 

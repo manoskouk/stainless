@@ -15,15 +15,15 @@ object Printer {
     Stacked(
       "(module ",
       Indented(Stacked(imports map doc)),
-      Indented(Stacked(globals map doc)),
+      Indented(Stacked(globals map mkGlobal)),
       Indented(doc(table)),
       Indented(Stacked(functions map doc)),
       ")"
     )
   }
 
-  private def doc(g: ValDef): Document = {
-    s"(global $$${g.name} ${g.tpe})"
+  private def mkGlobal(g: ValDef): Document = {
+    Lined(Seq(s"(global $$${g.name} ${g.tpe} ", doc(typeToZero(g.tpe)), ")"))
   }
 
   private def doc(t: Table): Document = {
@@ -36,9 +36,9 @@ object Printer {
       case FunSig(name, args, returnType) =>
         s"(func $$$name ${args.map(arg => s"(param $arg) ").mkString} (result $returnType))"
       case Memory(size) =>
-        s"(mem $size)"
+        s"(memory $size)"
     }
-    s"""(import "$extModule" "$name" $typeDoc)"""
+    Lined(Seq(s"""(import "$extModule" "$name" """, typeDoc, ")"))
   }
 
   private def doc(fh: FunDef): Document = {
@@ -134,7 +134,7 @@ object Printer {
       case Store(truncate, address, value) =>
         val ts = truncate.map(_.bitSize.toString).getOrElse("")
         Stacked(
-          s"(${expr.getType}.store$ts",
+          s"(${value.getType}.store$ts",
           Indented(doc(address)),
           Indented(doc(value)),
           ")"
@@ -169,11 +169,12 @@ object Printer {
           ")"
         )
       case Sequence(es) =>
-        Stacked(
-          "(",
-          Indented(Stacked(es map doc : _*)),
-          ")"
-        )
+        Stacked(es map doc : _*)
+        //Stacked(
+        //  "(",
+        //  Indented(Stacked(es map doc : _*)),
+        //  ")"
+        //)
     }
 
   }

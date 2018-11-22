@@ -19,6 +19,9 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   private def freshLabel(s: String) = FreshIdentifier(s).uniqueName
 
+  protected def mkImports(s: t.Symbols) = Seq(
+    Import("system", "mem", Memory(100))
+  )
   protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
   protected def mkTable(s: t.Symbols) = Table(
     s.functions.values.toSeq.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
@@ -48,7 +51,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       .sum
     Load(
       expr.getType, None,
-      add(expr, add(I32Const(4), I32Const(sizeBefore)))
+      add(expr, I32Const(sizeBefore))
     )
   }
 
@@ -107,7 +110,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
 
-  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, finish: Expr)(implicit env: Env): Expr = { ??? /*
+  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, finish: Expr)(implicit env: Env): Expr = { ??? /* TODO
     implicit val lh = env.lh
     implicit val gh = env.gh
     val f = lh.getFreshLocal(freshLabel("from"), i32)
