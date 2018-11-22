@@ -41,6 +41,11 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
       (_, _, es, _, _) => t.EqualsI32(es(0), es(1))
     )
 
+    case s.IfExprI32(cond, thenn, elze) => (
+      NoIdentifiers, NoVariables, Seq(cond, thenn, elze), NoTypes, NoFlags,
+      (_, _, es, _, _) => t.IfExprI32(es(0), es(1), es(2))
+    )
+
     case s.Output(msg) => (
       NoIdentifiers, NoVariables, Seq(msg), NoTypes, NoFlags,
       (_, _, es, _, _) => t.Output(es.head)

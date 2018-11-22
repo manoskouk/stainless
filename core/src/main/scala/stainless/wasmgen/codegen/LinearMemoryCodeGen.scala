@@ -138,17 +138,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
     }*/
   }
 
-  protected def mkUnbox0(e: Expr, tpe: Type)(implicit env: Env): Expr = Load(tpe, None, e)
-
-  protected def mkBox0(expr: Expr, tpe: Type)(implicit env: Env): Expr = {
-    implicit val gh = env.gh
-    Sequence( Seq(
-      GetGlobal(memB), // Leave the original memB, aka the pointer to the new boxed value, on the bottom of the stack to be returned
-      Store(None, GetGlobal(memB), expr),
-      SetGlobal(memB, add(GetGlobal(memB), I32Const(expr.getType.size)))
-    ))
-  }
-
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
     case t.IntegerType() => i64
     case t.RealType() => f64

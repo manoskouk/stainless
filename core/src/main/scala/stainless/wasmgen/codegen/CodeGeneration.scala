@@ -43,22 +43,6 @@ trait CodeGeneration {
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
   protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, end: Expr)(implicit env: Env): Expr
-  protected def mkUnbox0(e: Expr, tpe: Type)(implicit env: Env): Expr
-  protected def mkBox0(expr: Expr, tpe: Type)(implicit env: Env): Expr
-  final protected def mkUnbox(from: t.Type, to: t.Type, expr: Expr)(implicit env: Env): Expr = {
-    implicit val s = env.s
-    if (from.isInstanceOf[t.TypeParameter] && isElementaryType(to)) mkUnbox0(expr, transform(to))
-    else expr
-  }
-  final protected def mkBox(from: t.Type, to: t.Type, expr: Expr)(implicit env: Env): Expr = {
-    implicit val s = env.s
-    if (isElementaryType(from) && to.isInstanceOf[t.TypeParameter]) mkBox0(expr, transform(from))
-    else expr
-  }
-  final protected def isElementaryType(tpe: t.Type) = tpe match {
-    case t.BVType(_, _) | t.IntegerType() | t.RealType() => true
-    case _ => false
-  }
 
   final protected def typeToSign(tpe: t.Typed)(implicit s: t.Symbols): Sign = {
     tpe.getType match {
@@ -117,14 +101,8 @@ trait CodeGeneration {
         ))
       case t.Output(msg) => ???
       case fi@t.FunctionInvocation(id, tps, args) =>
-        val trArgs = args.zip(s.lookupFunction(id).get.params) map { case (arg, formal) =>
-          mkBox(arg.getType, formal.getType, transform(arg))
-        }
-        mkUnbox(
-          s.lookupFunction(id).get.returnType,
-          fi.getType,
-          Call(id.uniqueName, transform(fi.getType), trArgs)
-        )
+        Call(id.uniqueName, transform(fi.getType), args map transform)
+
       case t.IfExpr(cond, thenn, elze) =>
         If(
           FreshIdentifier("label").uniqueName,
@@ -148,20 +126,10 @@ trait CodeGeneration {
         )
 
       case t.Record(tpe, fields) =>
-        val formals = tpe.getRecord.definition.flattenFields
-        mkRecord(tpe, fields.zip(formals) map { case (fd, formal) =>
-          mkBox(fd.getType, formal.getType, transform(fd))
-        })
+        mkRecord(tpe, fields map transform)
       case rs@t.RecordSelector(record, selector) =>
         val rt = record.getType.asInstanceOf[t.RecordType]
-        val realType = rs.getType
-        val formalType = rt
-          .getRecord.definition
-          .flattenFields.find(_.id == selector).get
-          .getType
-        mkUnbox(formalType, realType,
-          mkRecordSelector(transform(record), rt, selector)
-        )
+        mkRecordSelector(transform(record), rt, selector)
 
       case t.FunctionPointer(id) =>
         mkFunctionPointer(id)

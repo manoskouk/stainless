@@ -47,14 +47,12 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.TypeParameter(id, flags) =>
         RecordType(AnyRefSort.id, Seq())
 
-      case s.BVType(signed, size) =>
-        BVType(true, if(size <= 32) 32 else 64)
 
       // These remain as is
       // case s.RealType() =>  TODO: We will represent Reals as floats (?)
       // case s.FunctionType(from, to) =>
       // case s.ArrayType(base) =>
-      //
+      // case s.BVType(signed, size) =>
       //
 
       case _ => super.transform(tp, env)
@@ -96,11 +94,10 @@ private [wasmgen] class ExprTransformer
   def initEnv = sym0
 
   private def typeToTag(tpe: t.Type) = tpe match {
-    case Int32Type() => 0
-    case Int64Type() => 1
+    case BVType(_, 32) => 0
+    case BVType(_, 64) => 1
     case RealType() => 3
     case FunctionType(_, _) => 4
-    case _ => ???
   }
 
   private def isElementaryType(tpe: t.Type) = tpe match {
@@ -447,7 +444,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
 
     val parent = new t.RecordADTSort(
       transform(sort.id, env),
-      sort.tparams map (transform(_, env)),
+      Seq(), //sort.tparams map (transform(_, env)),
       eqId
     ).copiedFrom(sort)
 
@@ -465,48 +462,35 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
   }
 
   private def mkEquality(
-    sort: t.RecordADTSort,
-    children: Seq[t.ConstructorSort],
-    sortsToEqs: Map[Identifier, Identifier]
+    sort: t.ConstructorSort
   )(implicit syms: t.Symbols): t.FunDef = {
     val codeId = sort.fields.head.id
     import t._
     def genEq(e1: Expr, e2: Expr): Expr = {
       e1.getType match {
-        case RecordType(id, tps) => FunctionInvocation(sortsToEqs(id), tps, Seq(e1, e2))
+        case RecordType(id, tps) => FunctionInvocation(id, tps, Seq(e1, e2))
         case _ => EqualsI32(e1, e2)
       }
     }
-    def cse(child: ConstructorSort)(v1: Variable, v2: Variable) = {
-      val tparams = v1.getType.asInstanceOf[RecordType].tps
-      val ff = child.flattenFields
-      val fields = ff.tail.map(_.id)
-      (
-        EqualsI32(RecordSelector(v1, codeId), Int32Literal(child.typeTag)) +:
-        fields.map(fld => genEq(
-          RecordSelector(CastDown(v1, RecordType(child.id, tparams)), fld),
-          RecordSelector(CastDown(v2, RecordType(child.id, tparams)), fld)
-        ))
-      ).reduceLeft(BVAnd)
-    }
+
     val dsl = new inox.ast.DSL { val trees: t.type = t }
-    dsl.mkFunDef(sortsToEqs(sort.id))(sort.tparams.map(_.id.name): _*)( tps =>
+    dsl.mkFunDef(FreshIdentifier("__eq_" + sort.id.uniqueName))(sort.tparams.map(_.id.name): _*)( tps =>
       (
         Seq (
-          ValDef(FreshIdentifier("v1"), RecordType(sort.id, tps)),
-          ValDef(FreshIdentifier("v2"), RecordType(sort.id, tps)) ),
+          ValDef(FreshIdentifier("v1"), AnyRefType),
+          ValDef(FreshIdentifier("v2"), AnyRefType)
+        ),
         Int32Type(),
         { case Seq(v1, v2) =>
-          val codesAreEq = EqualsI32(RecordSelector(v1, codeId), RecordSelector(v2, codeId))
-          if (children.isEmpty) {
-            codesAreEq
-          } else {
-            BVAnd(
-              codesAreEq,
-              children.map(cse(_)(v1, v2)).reduceLeft(BVOr)
-            )
-          }
 
+          ( EqualsI32(RecordSelector(v1, typeTagID), RecordSelector(v2, typeTagID)) +:
+            sort.fields.map( f =>
+              genEq(
+                RecordSelector(CastDown(v1, RecordType(sort.id, tps)), f.id),
+                RecordSelector(CastDown(v2, RecordType(sort.id, tps)), f.id)
+              )
+            )).reduceLeft(IfExpr(_, Int32Literal(1), _)
+          )
         }
       )
     )
@@ -540,10 +524,10 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
 
     // (2.1) Make equalities for sorts
     val eqsMap = sorts.map(s => s._1.id -> s._1.flags.collectFirst{ case t.HasADTEquality(id) => id }.get).toMap
-    val equalities = sorts
-      .map { case (sort, constructors) => mkEquality(sort, constructors, eqsMap)(initSymbols)}
-      .map(f => f.id -> f)
-      .toMap
+    //val equalities = sorts
+    //  .map { case (sort, constructors) => mkEquality(sort, constructors, eqsMap)(initSymbols)}
+    //  .map(f => f.id -> f)
+    //  .toMap
 
     // (2.2) Transform functions in program
     val manager = new SymbolsManager

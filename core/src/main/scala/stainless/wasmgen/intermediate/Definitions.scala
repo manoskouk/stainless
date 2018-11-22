@@ -103,9 +103,9 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   sealed class BoxedSort(tpe: Type)
     extends RecordSort(FreshIdentifier(tpe.asString(PrinterOptions())), Seq(), Some(AnyRefSort.id), Seq(ValDef(boxedValueId, tpe)))
 
-  val boxedSorts: Map[Type, BoxedSort] = Map(
-    Int32Type() -> new BoxedSort(Int32Type()),
-    Int64Type() -> new BoxedSort(Int64Type()),
-    RealType() -> new BoxedSort(RealType())
-  )
+  val boxedSorts: Map[Type, BoxedSort] = {
+    Seq(BVType(true, 32), BVType(false, 32), BVType(true, 64), BVType(false, 64), RealType())
+      .map { tpe => tpe -> new BoxedSort(tpe) }
+      .toMap
+  }
 }

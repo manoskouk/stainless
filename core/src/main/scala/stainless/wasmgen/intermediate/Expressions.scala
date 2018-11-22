@@ -65,6 +65,13 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
+  sealed case class IfExprI32(cond: Expr, thenn: Expr, elze: Expr) extends Expr {
+    def getType(implicit s: Symbols) = (cond.getType, thenn.getType, elze.getType) match {
+      case (Int32Type(), tt, et) if tt == et => tt
+      case _ => Untyped
+    }
+  }
+
   sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {
     def getType(implicit s: Symbols) =
       if (length.getType == Int32Type() && init.forall(_.getType == base)) ArrayType(base)
