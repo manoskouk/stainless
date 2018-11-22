@@ -5,22 +5,22 @@ package stainless.wasmgen.intermediate
 import inox.ast.Identifier
 
 trait Types extends inox.ast.Types { self: Trees =>
-  sealed case class RecordType(record: Identifier, tps: Seq[Type]) extends Type {
-    def lookupRecord(implicit s: Symbols): Option[TypedRecordSort] = s.lookupRecord(record, tps)
+  sealed case class RecordType(record: Identifier) extends Type {
+    def lookupRecord(implicit s: Symbols): Option[RecordSort] = s.lookupRecord(record)
 
-    def getRecord(implicit s: Symbols): TypedRecordSort = s.getRecord(record, tps)
+    def getRecord(implicit s: Symbols): RecordSort = s.getRecord(record)
   
     def parent(implicit s: Symbols): Option[RecordType] = {
-      s.getRecord(record).parent.map(RecordType(_, tps))
+      s.getRecord(record).parent.map(RecordType)
     }
 
     def conformsWith(superType: Type)(implicit s: Symbols): Boolean = superType match {
-      case RecordType(record2, tps2) =>
-        (getRecord.ancestors contains record2) && tps == tps2
+      case RecordType(record2) =>
+        getRecord.ancestors contains record2
       case _ => false
     }
   }
 
-  val AnyRefType = RecordType(AnyRefSort.id, Seq())
+  val AnyRefType = RecordType(AnyRefSort.id)
 
 }

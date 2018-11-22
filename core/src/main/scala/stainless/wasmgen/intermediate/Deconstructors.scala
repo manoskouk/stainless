@@ -75,9 +75,9 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
   }
 
   override def deconstruct(tpe: s.Type): Deconstructed[t.Type] = tpe match {
-    case s.RecordType(record, tps) => (
-      Seq(record), NoVariables, NoExpressions, tps, NoFlags,
-      (recs, _, _, tps, _) => t.RecordType(recs.head, tps)
+    case s.RecordType(record) => (
+      Seq(record), NoVariables, NoExpressions, NoTypes, NoFlags,
+      (recs, _, _, tps, _) => t.RecordType(recs.head)
     )
     case _ => super.deconstruct(tpe)
   }

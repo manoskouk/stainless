@@ -44,7 +44,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr = {
     implicit val s = env.s
-    val fields = rt.getRecord.definition.flattenFields
+    val fields = rt.getRecord.flattenFields
     val sizeBefore = fields
       .takeWhile(_.id != id)
       .map(fd => transform(fd.getType).size)
@@ -143,6 +143,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
     case t.RealType() => f64
     case t.BVType(_, size) => if (size == 64) i64 else i32
     case t.ArrayType(_) => i32
-    case t.RecordType(_, _) => i32
+    case t.RecordType(_) => i32
   }
 }

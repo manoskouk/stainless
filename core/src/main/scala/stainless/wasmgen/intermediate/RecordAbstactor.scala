@@ -23,13 +23,10 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.StringType() => ArrayType(Int32Type())
 
       case s.ADTType(id, tps) =>
-        RecordType(id, tps map (transform(_, env)))
+        RecordType(id)
 
       case s.TupleType(bases) =>
-        RecordType(
-          env.lookup[s.ADTSort](s"Tuple${bases.size}").id,
-          bases map ( tp => transform(tp.getType, env))
-        )
+        RecordType(env.lookup[s.ADTSort](s"Tuple${bases.size}").id)
       case s.SetType(base) => ???
       case s.BagType(base) => ???
       case s.MapType(from, to) => ???
@@ -45,8 +42,7 @@ trait Transformer extends stainless.transformers.Transformer {
         transform(vd.getType, env)
 
       case s.TypeParameter(id, flags) =>
-        RecordType(AnyRefSort.id, Seq())
-
+        RecordType(AnyRefSort.id)
 
       // These remain as is
       // case s.RealType() =>  TODO: We will represent Reals as floats (?)
@@ -85,7 +81,7 @@ private[wasmgen] class SymbolsManager {
 
 private [wasmgen] class ExprTransformer
     (manager: SymbolsManager, keepContracts: Boolean, sym0: stainless.trees.Symbols)
-    (implicit  sym: trees.Symbols)
+    (implicit sym: trees.Symbols)
   extends Transformer
 {
   import t._
@@ -107,13 +103,19 @@ private [wasmgen] class ExprTransformer
 
   private def maybeBox(e: t.Expr, expected: t.Type): t.Expr = {
     if (isElementaryType(e.getType) && expected == AnyRefType)
-      Record(RecordType(boxedSorts(e.getType).id, Seq()), Seq(Int32Literal(typeToTag(e.getType)), e))
-    else e
+      CastUp(
+        Record(RecordType(boxedSorts(e.getType).id), Seq(Int32Literal(typeToTag(e.getType)), e)),
+        AnyRefType
+      )
+    else CastUp(e, AnyRefType)
   }
   private def maybeUnbox(e: t.Expr, expected: t.Type): t.Expr = {
     if (isElementaryType(expected) && e.getType == AnyRefType)
-      RecordSelector(e, boxedValueId)
-    else e
+      RecordSelector(
+        CastDown(e, RecordType(boxedSorts(expected).id)),
+        boxedValueId
+      )
+    else CastDown(e, expected.asInstanceOf[RecordType])
   }
 
   def transform(fd: s.FunDef): t.FunDef = {
@@ -200,8 +202,8 @@ private [wasmgen] class ExprTransformer
         val closureRecord = new ClosureSort(funRecId, envIds)
         manager.addRecord(closureRecord)
 
-        val funRecordType = RecordType(funRecId, Seq())
-        val closureType = RecordType(closureRecord.id, Seq())
+        val funRecordType = RecordType(funRecId)
+        val closureType = RecordType(closureRecord.id)
 
         val function = {
           val envArg  = ValDef.fresh("env", funRecordType)
@@ -249,7 +251,7 @@ private [wasmgen] class ExprTransformer
         // Except constructor fields, we also store the i32 tag corresponding to this constructor
         val typeTag = sym.getRecord(id).asInstanceOf[ConstructorSort].typeTag
         val formals = sym0.constructors(id).fields.map(_.getType)
-        val tpe = RecordType(id, tps map (transform(_, env)))
+        val tpe = RecordType(id)
         CastUp(
           Record(tpe, mkIndex(typeTag) +: args.zip(formals).map {
             case (arg, formal) => maybeBox(transform(arg, env), transform(formal, env))
@@ -268,7 +270,7 @@ private [wasmgen] class ExprTransformer
         val childId = sym.childrenOf(parent).find(_.fields.exists(_.id == selector)).get.id
         maybeUnbox(
           RecordSelector(
-            CastDown(transform(adt, env), RecordType(childId, tps map (transform(_, env)))),
+            CastDown(transform(adt, env), RecordType(childId)),
             selector
           ),
           transform(as.getType, env)
@@ -444,7 +446,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
 
     val parent = new t.RecordADTSort(
       transform(sort.id, env),
-      Seq(), //sort.tparams map (transform(_, env)),
       eqId
     ).copiedFrom(sort)
 
@@ -453,7 +454,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
         transform(cons.id, env),
         parent.id,
         sortCodes.nextGlobal,
-        parent.tparams,
         cons.fields.map(transform(_, env))
       ).copiedFrom(cons)
     }
@@ -468,13 +468,13 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     import t._
     def genEq(e1: Expr, e2: Expr): Expr = {
       e1.getType match {
-        case RecordType(id, tps) => FunctionInvocation(id, tps, Seq(e1, e2))
+        case RecordType(id) => FunctionInvocation(id, Seq(), Seq(e1, e2))
         case _ => EqualsI32(e1, e2)
       }
     }
 
     val dsl = new inox.ast.DSL { val trees: t.type = t }
-    dsl.mkFunDef(FreshIdentifier("__eq_" + sort.id.uniqueName))(sort.tparams.map(_.id.name): _*)( tps =>
+    dsl.mkFunDef(FreshIdentifier("__eq_" + sort.id.uniqueName))()( _ =>
       (
         Seq (
           ValDef(FreshIdentifier("v1"), AnyRefType),
@@ -486,8 +486,8 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
           ( EqualsI32(RecordSelector(v1, typeTagID), RecordSelector(v2, typeTagID)) +:
             sort.fields.map( f =>
               genEq(
-                RecordSelector(CastDown(v1, RecordType(sort.id, tps)), f.id),
-                RecordSelector(CastDown(v2, RecordType(sort.id, tps)), f.id)
+                RecordSelector(CastDown(v1, RecordType(sort.id)), f.id),
+                RecordSelector(CastDown(v2, RecordType(sort.id)), f.id)
               )
             )).reduceLeft(IfExpr(_, Int32Literal(1), _)
           )
@@ -508,7 +508,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
         }
       ))
     )
-
   }
 
   def transform(syms0: s.Symbols): t.Symbols = {
@@ -520,10 +519,10 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     val allSorts = sorts.flatMap(s => s._1 +: s._2).map(s => s.id -> s).toMap
 
     // (1.2) These are the program types (initial symbols)
-    val initSymbols = t.Symbols(allSorts, Map())
+    val initSymbols = t.Symbols(allSorts ++ t.builtinSortsMap, Map())
 
     // (2.1) Make equalities for sorts
-    val eqsMap = sorts.map(s => s._1.id -> s._1.flags.collectFirst{ case t.HasADTEquality(id) => id }.get).toMap
+    //val eqsMap = sorts.map(s => s._1.id -> s._1.flags.collectFirst{ case t.HasADTEquality(id) => id }.get).toMap
     //val equalities = sorts
     //  .map { case (sort, constructors) => mkEquality(sort, constructors, eqsMap)(initSymbols)}
     //  .map(f => f.id -> f)
@@ -539,6 +538,9 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
       initSymbols.records ++ manager.newRecords,
       /*equalities ++*/ funs ++ manager.newFunctions
     )
+
+    println(ret.asString(t.PrinterOptions()))
+    ret.functions.foreach(fn => ret.explainTyping(fn._2.fullBody)(t.PrinterOptions()))
 
     // println(ret)
     ret

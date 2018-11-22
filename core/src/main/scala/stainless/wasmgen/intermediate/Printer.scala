@@ -25,16 +25,13 @@ trait Printer extends stainless.ast.Printer {
     case ArrayCopy(from, to, start, end) =>
       p"Array.copy($from, $to, $start, $end)"
 
-    case RecordType(id, tps) =>
-      p"$id${nary(tps, ", ", "[", "]")}"
+    case RecordType(id) =>
+      p"$id"
 
     case rs: RecordSort =>
-      p"struct ${rs.id}${nary(rs.tparams, ", ", "[", "]")} "
+      p"struct ${rs.id} "
       rs.parent foreach { par => p"extends $par " }
       p"${nary(rs.fields, ", ", "(", ")")}"
-
-    case trs: TypedRecordSort =>
-      p"typed ${trs.definition.id} ${nary(trs.tps, ", ", "[", "]")}"
 
     case _ => super.ppBody(tree)
   }
