@@ -47,13 +47,17 @@ trait CodeGeneration {
   protected def mkBox0(expr: Expr, tpe: Type)(implicit env: Env): Expr
   final protected def mkUnbox(from: t.Type, to: t.Type, expr: Expr)(implicit env: Env): Expr = {
     implicit val s = env.s
-    if (from.isInstanceOf[t.TypeParameter] && !to.isInstanceOf[t.TypeParameter]) mkUnbox0(expr, transform(to))
+    if (from.isInstanceOf[t.TypeParameter] && isElementaryType(to)) mkUnbox0(expr, transform(to))
     else expr
   }
   final protected def mkBox(from: t.Type, to: t.Type, expr: Expr)(implicit env: Env): Expr = {
     implicit val s = env.s
-    if (!from.isInstanceOf[t.TypeParameter] && to.isInstanceOf[t.TypeParameter]) mkBox0(expr, transform(from))
+    if (isElementaryType(from) && to.isInstanceOf[t.TypeParameter]) mkBox0(expr, transform(from))
     else expr
+  }
+  final protected def isElementaryType(tpe: t.Type) = tpe match {
+    case t.BVType(_, _) | t.IntegerType() | t.RealType() => true
+    case _ => false
   }
 
   final protected def typeToSign(tpe: t.Typed)(implicit s: t.Symbols): Sign = {
@@ -164,7 +168,8 @@ trait CodeGeneration {
       case t.Application(callee, args) =>
         Call_Indirect(
           transform(callee.getType.asInstanceOf[t.FunctionType].to),
-          transform(callee), args map transform
+          transform(callee),
+          args map transform
         )
 
       case t.CastDown(e, subtype) =>

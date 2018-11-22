@@ -60,20 +60,20 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
   /** $encodingof `... == ...` */
   sealed case class EqualsI32(lhs: Expr, rhs: Expr) extends Expr with CachingTyped {
     override protected def computeType(implicit s: Symbols): Type = {
-      if (lhs.getType == rhs.getType) IndexType()
+      if (lhs.getType == rhs.getType) Int32Type()
       else Untyped
     }
   }
 
   sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {
     def getType(implicit s: Symbols) =
-      if (length.getType == IndexType() && init.forall(_.getType == base)) ArrayType(base)
+      if (length.getType == Int32Type() && init.forall(_.getType == base)) ArrayType(base)
       else Untyped
   }
 
   sealed case class ArraySet(array: Expr, index: Expr, value: Expr) extends Expr {
     def getType(implicit s: Symbols) = (array.getType, index.getType, value.getType) match {
-      case (ArrayType(base1), IndexType(), base2) if base1 == base2 => UnitType()
+      case (ArrayType(base1), Int32Type(), base2) if base1 == base2 => UnitType()
       case _ => Untyped
     }
   }
@@ -83,7 +83,7 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     */
   sealed case class ArrayCopy(from: Expr, to: Expr, start: Expr, end: Expr) extends Expr {
     def getType(implicit s: Symbols) = (from.getType, to.getType, start.getType, end.getType) match {
-      case (ArrayType(base1), ArrayType(base2), IndexType(), IndexType()) if base1 == base2 => UnitType()
+      case (ArrayType(base1), ArrayType(base2), Int32Type(), Int32Type()) if base1 == base2 => UnitType()
       case _ => Untyped
     }
   }

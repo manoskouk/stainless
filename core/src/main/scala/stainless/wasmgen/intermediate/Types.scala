@@ -21,12 +21,6 @@ trait Types extends inox.ast.Types { self: Trees =>
     }
   }
 
-  // TODO: Extend inox class if it ceases being sealed
-  sealed abstract class BVTypeExtractor2(signed: Boolean, size: Int) {
-    def apply(): BVType = BVType(signed, size)
-    def unapply(tpe: BVType): Boolean = tpe.signed == signed && tpe.size == size
-  }
+  val AnyRefType = RecordType(AnyRefSort.id, Seq())
 
-  object ByteType  extends BVTypeExtractor2(false, 8)
-  object IndexType extends BVTypeExtractor2(false, 32)
 }

@@ -21,6 +21,9 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     def childrenOf(id: Identifier) = records.collect{ case (_, cs:ConstructorSort) if cs.parent.contains(id) => cs }
   }
 
+  // Used to tag dynamically called functions
+  case object Dynamic extends Flag("dynamic", Seq.empty)
+
   /** A record type represents a sequence of named fields in memory.
     * The parent's fields come first, then the fields of the current record.
     * A record complies to its parent's type.
@@ -71,29 +74,38 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
       definition.ancestors
   }
 
+  private[wasmgen] val typeTagID = FreshIdentifier("code")
+  private[wasmgen] val typeTag = ValDef(typeTagID, Int32Type())
   private[wasmgen] val funPointerId = FreshIdentifier("funP")
   import scala.collection.mutable.{Map => MMap}
   private[wasmgen] val funSortIds = MMap[FunctionType, Identifier]()
-  private[wasmgen] val adtCodeID = FreshIdentifier("code")
+  private[wasmgen] val boxedValueId = FreshIdentifier("value")
+
+  object AnyRefSort extends RecordSort(FreshIdentifier("anyref"), Seq(), None, Seq(typeTag), Seq())
 
   sealed class FunPointerSort(id: Identifier, ft: FunctionType)
-    extends RecordSort(id, Seq(), None, Seq(ValDef(funPointerId, ft)))
+    extends RecordSort(id, Seq(), Some(AnyRefSort.id), Seq(ValDef(funPointerId, ft)))
 
   sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])
     extends RecordSort(FreshIdentifier("closure"), Seq(), Some(parent), env)
 
   sealed class RecordADTSort(id: Identifier, tparams: Seq[TypeParameterDef], equality: Identifier)
-    extends RecordSort(id, tparams, None, Seq(ValDef(adtCodeID, BVType(signed = false, 32)) ), Seq(HasADTEquality(equality))) // TODO: Fix type
+    extends RecordSort(id, tparams, Some(AnyRefSort.id), Seq(), Seq(HasADTEquality(equality))) // TODO: Fix type
 
   sealed class ConstructorSort(
     id: Identifier,
     parent: Identifier,
-    val code: Int,
+    val typeTag: Int,
     tparams: Seq[TypeParameterDef],
     fields: Seq[ValDef]
   ) extends RecordSort(id, tparams, Some(parent), fields)
 
-  // Used to tag dynamically called functions
-  case object Dynamic extends Flag("dynamic", Seq.empty)
+  sealed class BoxedSort(tpe: Type)
+    extends RecordSort(FreshIdentifier(tpe.asString(PrinterOptions())), Seq(), Some(AnyRefSort.id), Seq(ValDef(boxedValueId, tpe)))
 
+  val boxedSorts: Map[Type, BoxedSort] = Map(
+    Int32Type() -> new BoxedSort(Int32Type()),
+    Int64Type() -> new BoxedSort(Int64Type()),
+    RealType() -> new BoxedSort(RealType())
+  )
 }

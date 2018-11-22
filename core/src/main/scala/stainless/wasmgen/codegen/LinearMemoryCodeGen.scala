@@ -110,7 +110,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
 
-  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, finish: Expr)(implicit env: Env): Expr = { ??? /* TODO
+  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, finish: Expr)(implicit env: Env): Expr = { ??? /*
     implicit val lh = env.lh
     implicit val gh = env.gh
     val f = lh.getFreshLocal(freshLabel("from"), i32)
@@ -155,6 +155,5 @@ object LinearMemoryCodeGen extends CodeGeneration {
     case t.BVType(_, size) => if (size == 64) i64 else i32
     case t.ArrayType(_) => i32
     case t.RecordType(_, _) => i32
-    case t.TypeParameter(_, _) => i32
   }
 }

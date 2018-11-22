@@ -16,11 +16,11 @@ trait Transformer extends stainless.transformers.Transformer {
     import t._
     tp match {
       case s.Untyped => Untyped
-      case s.BooleanType() => IndexType()
-      case s.UnitType() => IndexType()
-      case s.CharType() => Int8Type()
+      case s.BooleanType() => Int32Type()
+      case s.UnitType() => Int32Type()
+      case s.CharType() => Int32Type()
       case s.IntegerType() => Int64Type() // FIXME: Implement big integers properly
-      case s.StringType() => ArrayType(Int8Type())
+      case s.StringType() => ArrayType(Int32Type())
 
       case s.ADTType(id, tps) =>
         RecordType(id, tps map (transform(_, env)))
@@ -44,12 +44,18 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.RefinementType(vd, prop) =>
         transform(vd.getType, env)
 
+      case s.TypeParameter(id, flags) =>
+        RecordType(AnyRefSort.id, Seq())
+
+      case s.BVType(signed, size) =>
+        BVType(true, if(size <= 32) 32 else 64)
+
       // These remain as is
       // case s.RealType() =>  TODO: We will represent Reals as floats (?)
       // case s.FunctionType(from, to) =>
       // case s.ArrayType(base) =>
-      // case s.BVType(signed, size) =>
-      // case s.TypeParameter(id, flags) =>
+      //
+      //
 
       case _ => super.transform(tp, env)
     }
@@ -85,9 +91,33 @@ private [wasmgen] class ExprTransformer
   extends Transformer
 {
   import t._
-  private val StrType = ArrayType(Int8Type())
-  private def mkIndex(i: Int) = BVLiteral(false, 32, i)
+  private val StrType = ArrayType(Int32Type())
+  private def mkIndex(i: Int) = BVLiteral(true, 32, i)
   def initEnv = sym0
+
+  private def typeToTag(tpe: t.Type) = tpe match {
+    case Int32Type() => 0
+    case Int64Type() => 1
+    case RealType() => 3
+    case FunctionType(_, _) => 4
+    case _ => ???
+  }
+
+  private def isElementaryType(tpe: t.Type) = tpe match {
+    case t.BVType(_, _) | t.IntegerType() | t.RealType() => true
+    case _ => false
+  }
+
+  private def maybeBox(e: t.Expr, expected: t.Type): t.Expr = {
+    if (isElementaryType(e.getType) && expected == AnyRefType)
+      Record(RecordType(boxedSorts(e.getType).id, Seq()), Seq(Int32Literal(typeToTag(e.getType)), e))
+    else e
+  }
+  private def maybeUnbox(e: t.Expr, expected: t.Type): t.Expr = {
+    if (isElementaryType(expected) && e.getType == AnyRefType)
+      RecordSelector(e, boxedValueId)
+    else e
+  }
 
   def transform(fd: s.FunDef): t.FunDef = {
     new t.FunDef(
@@ -103,28 +133,23 @@ private [wasmgen] class ExprTransformer
   override def transform(e: s.Expr, env: Env): Expr = {
     implicit val impEnv = env
     e match {
-      // Misc.
+      // Literals
       case s.BooleanLiteral(value) =>
         if (value) mkIndex(1) else mkIndex(0)
       case s.UnitLiteral() =>
         mkIndex(0)
       case s.CharLiteral(value) =>
-        Int8Literal(value.toByte)
+        ByteLiteral(value.toByte)
+
+      // Misc.
       case s.Annotated(body, flags) =>
         transform(body, env)
       case s.Error(tpe, description) =>
         Sequence(Output(transform(s.StringLiteral(description), env)), NoTree(transform(tpe, env)))
       case me: s.MatchExpr => sym.matchToIfThenElse(transform(me, env))
       case s.Equals(lhs, rhs) =>
-        val tl = transform(lhs, env)
-        val tr = transform(rhs, env)
-        tl.getType match {
-          case t.RecordType(record, tps) =>
-            val eqFun = sym.getRecord(record).flags.collectFirst{ case HasADTEquality(id) => id }.get
-            FunctionInvocation(eqFun, tps, Seq(tl, tr))
-          case _ =>
-            EqualsI32(tl, tr)  // TODO: This will cover numeric types and arrays
-        }
+        // Equality is left abstract for now and is lowered later
+        t.EqualsI32(transform(lhs, env), transform(rhs, env))
 
       // Contracts
       case s.Assume(pred, body) =>
@@ -182,7 +207,6 @@ private [wasmgen] class ExprTransformer
         val closureType = RecordType(closureRecord.id, Seq())
 
         val function = {
-
           val envArg  = ValDef.fresh("env", funRecordType)
           val envArg2 = ValDef.fresh("env", closureType)
 
@@ -209,7 +233,7 @@ private [wasmgen] class ExprTransformer
           CastUp(
             Record(
               closureType,
-              FunctionPointer(function.id) +: fv.map(_.toVariable)
+              Int32Literal(typeToTag(funType)) +: FunctionPointer(function.id) +: fv.map(_.toVariable)
             ),
             funRecordType
           )
@@ -225,26 +249,43 @@ private [wasmgen] class ExprTransformer
 
       // ADTs
       case s.ADT(id, tps, args) =>
-        // Except constructor fields, we also store the i32 code corresponding to this constructor
-        val constrCode = sym.getRecord(id).asInstanceOf[ConstructorSort].code
+        // Except constructor fields, we also store the i32 tag corresponding to this constructor
+        val typeTag = sym.getRecord(id).asInstanceOf[ConstructorSort].typeTag
+        val formals = sym0.constructors(id).fields.map(_.getType)
         val tpe = RecordType(id, tps map (transform(_, env)))
         CastUp(
-          Record(tpe, mkIndex(constrCode) +: args.map(transform(_, env))),
+          Record(tpe, mkIndex(typeTag) +: args.zip(formals).map {
+            case (arg, formal) => maybeBox(transform(arg, env), transform(formal, env))
+          }),
           tpe.parent.get
         )
       case s.IsConstructor(expr, id) =>
         // We need to compare the constructor code of given value
         // to the code corresponding to constructor 'id'
         EqualsI32(
-          RecordSelector(transform(expr, env), adtCodeID),
-          mkIndex(sym.getRecord(id).asInstanceOf[ConstructorSort].code)
+          RecordSelector(transform(expr, env), typeTagID),
+          mkIndex(sym.getRecord(id).asInstanceOf[ConstructorSort].typeTag)
         )
       case as@s.ADTSelector(adt, selector) =>
         val s.ADTType(parent, tps) = as.getType
         val childId = sym.childrenOf(parent).find(_.fields.exists(_.id == selector)).get.id
-        RecordSelector(
-          CastDown(transform(adt, env), RecordType(childId, tps map (transform(_, env)))),
-          selector
+        maybeUnbox(
+          RecordSelector(
+            CastDown(transform(adt, env), RecordType(childId, tps map (transform(_, env)))),
+            selector
+          ),
+          transform(as.getType, env)
+        )
+
+      case s.FunctionInvocation(id, tps, args) =>
+        val formals = sym0.functions(id).params.map(_.getType)
+        maybeUnbox(
+          t.FunctionInvocation(id, tps map (transform(_, env)),
+            args zip formals map { case (arg, formal) =>
+              maybeBox(transform(arg, env), transform(formal, env))
+            }
+          ),
+          transform(e.getType, env)
         )
 
       // Arrays
@@ -271,9 +312,9 @@ private [wasmgen] class ExprTransformer
       // Strings
       case s.StringLiteral(str) =>
         val strV = Variable.fresh(str, StrType)
-        Let(strV.toVal, NewArray(IndexLiteral(str.length), ByteType(), None),
+        Let(strV.toVal, NewArray(IndexLiteral(str.length), Int32Type(), None),
           str.zipWithIndex.map{
-            case (ch, index) => ArraySet(strV, IndexLiteral(index), Int8Literal(ch.toByte))
+            case (ch, index) => ArraySet(strV, IndexLiteral(index), Int32Literal(ch.toByte))
           }.reduceRight(Sequence)
         )
       case s.StringConcat(lhs, rhs) =>
@@ -284,20 +325,20 @@ private [wasmgen] class ExprTransformer
           Let(r.toVal, transform(rhs, env),
             Let(
               newArray.toVal,
-              NewArray(Plus(ArrayLength(l), ArrayLength(r)), ByteType(), None),
+              NewArray(Plus(ArrayLength(l), ArrayLength(r)), Int32Type(), None),
               Sequence(
                 ArrayCopy(l, newArray, mkIndex(0), ArrayLength(l)),
                 ArrayCopy(r, newArray, ArrayLength(l), Plus(ArrayLength(l), ArrayLength(r)))
               )
             )))
       case s.SubString(expr, start, end) =>
-        val startV = Variable.fresh("start", IndexType())
-        val endV = Variable.fresh("end", IndexType())
+        val startV = Variable.fresh("start", Int32Type())
+        val endV = Variable.fresh("end", Int32Type())
         Let(startV.toVal, transform(start, env),
           Let(endV.toVal, transform(end, env),
             ArrayCopy(
               transform(expr, env),
-              NewArray(Minus(endV, startV), ByteType(), None),
+              NewArray(Minus(endV, startV), Int32Type(), None),
               startV,
               endV ) ))
 
@@ -347,7 +388,6 @@ private [wasmgen] class ExprTransformer
       // case s.Variable(id, tpe, flags) =>
       // case s.Let(vd, value, body) =>
       // case s.IfExpr(cond, thenn, elze) =>
-      // case s.FunctionInvocation(id, tps, args) => ???
       // case s.NoTree(tpe) =>
       // case s.Plus(lhs, rhs) =>
       // case s.Minus(lhs, rhs) =>
@@ -390,7 +430,17 @@ private [wasmgen] class ExprTransformer
   * - Represent BigInts properly
   * - Implement type representations for composite types based on ADTs/ directly records
   */
-object RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
+class RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
+
+  val sortCodes = new inox.utils.UniqueCounter[Unit]
+  locally {
+    // We want to reserve the first 5 codes for native types
+    sortCodes.nextGlobal // i32
+    sortCodes.nextGlobal // i64
+    sortCodes.nextGlobal // f32
+    sortCodes.nextGlobal // f64
+    sortCodes.nextGlobal // anyfun
+  }
  
   def transform(sort: s.ADTSort, env: Env): (t.RecordADTSort, Seq[t.ConstructorSort]) = {
     val eqId = FreshIdentifier(s"eq${sort.id.name}")
@@ -401,11 +451,11 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
       eqId
     ).copiedFrom(sort)
 
-    val children = sort.constructors.zipWithIndex map { case (cons, ind) =>
+    val children = sort.constructors map { cons =>
       new t.ConstructorSort(
         transform(cons.id, env),
         parent.id,
-        ind,
+        sortCodes.nextGlobal,
         parent.tparams,
         cons.fields.map(transform(_, env))
       ).copiedFrom(cons)
@@ -432,7 +482,7 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
       val ff = child.flattenFields
       val fields = ff.tail.map(_.id)
       (
-        EqualsI32(RecordSelector(v1, codeId), Int32Literal(child.code)) +:
+        EqualsI32(RecordSelector(v1, codeId), Int32Literal(child.typeTag)) +:
         fields.map(fld => genEq(
           RecordSelector(CastDown(v1, RecordType(child.id, tparams)), fld),
           RecordSelector(CastDown(v2, RecordType(child.id, tparams)), fld)
@@ -445,7 +495,7 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
         Seq (
           ValDef(FreshIdentifier("v1"), RecordType(sort.id, tps)),
           ValDef(FreshIdentifier("v2"), RecordType(sort.id, tps)) ),
-        IndexType(),
+        Int32Type(),
         { case Seq(v1, v2) =>
           val codesAreEq = EqualsI32(RecordSelector(v1, codeId), RecordSelector(v2, codeId))
           if (children.isEmpty) {
@@ -503,7 +553,7 @@ object RecordAbstractor extends inox.transformers.SymbolTransformer with Transfo
     // (3.1) Put it all together
     val ret = t.Symbols(
       initSymbols.records ++ manager.newRecords,
-      equalities ++ funs ++ manager.newFunctions
+      /*equalities ++*/ funs ++ manager.newFunctions
     )
 
     // println(ret)
