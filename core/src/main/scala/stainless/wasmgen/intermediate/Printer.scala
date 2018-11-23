@@ -20,6 +20,22 @@ trait Printer extends stainless.ast.Printer {
 
     case EqualsI32(lhs, rhs) => p"$lhs == $rhs"
 
+    case IfExprI32(c, t, ie: IfExprI32) =>
+      optP {
+        p"""|if ($c) {
+            |  $t
+            |} else $ie"""
+      }
+
+    case IfExprI32(c, t, e) =>
+      optP {
+        p"""|if ($c) {
+            |  $t
+            |} else {
+            |  $e
+            |}"""
+      }
+
     case Output(msg) => p"println($msg)"
 
     case NewArray(length, base, init) => p"new Array[$base]($length){ ${init.getOrElse("")} }"

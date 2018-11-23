@@ -72,7 +72,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
 
   private[wasmgen] val typeTagID = FreshIdentifier("code")
   private[wasmgen] val typeTag = ValDef(typeTagID, Int32Type())
-  private[wasmgen] val funPointerId = FreshIdentifier("funP")
+  private[wasmgen] val funPointerId = FreshIdentifier("fPointer")
   private[wasmgen] val boxedValueId = FreshIdentifier("value")
 
   object AnyRefSort extends RecordSort(FreshIdentifier("anyref"), None, Seq(typeTag), Seq())

@@ -29,7 +29,8 @@ trait Transformer extends stainless.transformers.Transformer {
 
       case s.FunctionType(from, to) =>
         RecordType(env._2.getFunTypeRecord(
-          FunctionType(from map (transform(_, env)), transform(to, env))
+          FunctionType(Seq.fill(from.size)(AnyRefType), AnyRefType)
+          //FunctionType(from map (transform(_, env)), transform(to, env))
         ))
 
       case s.TupleType(bases) =>
@@ -199,23 +200,22 @@ private [wasmgen] class ExprTransformer (
       case s.Application(callee, args) =>
         val tCallee = transform(callee, env)
         val vCallee = Variable.fresh("fun", transform(callee.getType, env))
+        // All arguments are passed to lambdas and result is returned as anyref
         Let(vCallee.toVal, tCallee,
-          Application(
+          maybeUnbox(Application(
             RecordSelector(vCallee, funPointerId),
-            vCallee +: args.map(transform(_, env))
-          )
+            vCallee +: args.map( arg => maybeBox(arg, AnyRefType, env))
+          ), AnyRefType, transform(e.getType, env), env)
         )
       case lmd@s.Lambda(params, body) =>
-        val funType = FunctionType(
-          params.map(p => transform(p.getType, env)),
-          transform(body.getType, env)
+        val boxedFunType = FunctionType(
+          Seq.fill(params.size)(AnyRefType),
+          AnyRefType
         )
         val fv = (s.exprOps.variablesOf(body).map(_.toVal) -- params).toSeq.map(transform(_, env))
 
         // Make/find a RecordSort for this function type, and one with the specific env.
-        val funRecId = manager.getFunTypeRecord(funType)
-
-        val funName = FreshIdentifier("lambda")
+        val funRecId = manager.getFunTypeRecord(boxedFunType)
 
         val envIds = fv.map(_.freshen)
         val closureRecord = new ClosureSort(funRecId, envIds)
@@ -225,23 +225,41 @@ private [wasmgen] class ExprTransformer (
         val closureType = RecordType(closureRecord.id)
 
         val function = {
-          val envArg  = ValDef.fresh("env", funRecordType)
-          val envArg2 = ValDef.fresh("env", closureType)
-
-          // New function body has to copy environment to local variables
-          val extrEnv = fv.zip(envIds).foldRight(transform(body, env)) { case ((v, envId), rest) =>
-            Let(v, RecordSelector(envArg2.toVariable, envId.id), rest)
+          def extractEnv(env: Variable, body: Expr) = {
+            val castEnv = ValDef.fresh("env", closureType)
+            Let(
+              castEnv,
+              CastDown(env, closureType),
+              fv.zip(envIds).foldRight(body) { case ((v, envId), rest) =>
+                Let(v, RecordSelector(castEnv.toVariable, envId.id), rest)
+              }
+            )
           }
 
-          val fullBody = Let(envArg2, CastDown(envArg.toVariable, closureType), extrEnv)
+          def unboxParams(boxedParams: Seq[ValDef], body: Expr) = {
+            boxedParams.zip(params).foldRight(body) { case ((boxed, unboxed), rest) =>
+              Let(transform(unboxed, env),
+                maybeUnbox(boxed.toVariable, AnyRefType, transform(unboxed.getType, env), env),
+                rest
+              )
+            }
+          }
 
-          val fd = new FunDef(
-            FreshIdentifier("lambda"), Seq(),
-            envArg +: params.map(transform(_, env)),
-            funType.to,
-            fullBody,
-            Seq(Dynamic)
-          )
+          def boxResult(body: s.Expr) = maybeBox(body, AnyRefType, env)
+
+          val fd = {
+            val envParam  = ValDef.fresh("env", funRecordType)
+            val boxedParams = params map (p => ValDef(p.id.freshen, AnyRefType))
+            new FunDef(
+              FreshIdentifier("lambda"), Seq(),
+              envParam +: boxedParams,
+              AnyRefType,
+              extractEnv(envParam.toVariable,
+                unboxParams(boxedParams,
+                  boxResult(body))),
+              Seq(Dynamic)
+            )
+          }
 
           manager.addFunction(fd)
           fd
@@ -251,7 +269,7 @@ private [wasmgen] class ExprTransformer (
           CastUp(
             Record(
               closureType,
-              Int32Literal(typeToTag(funType)) +: FunctionPointer(function.id) +: fv.map(_.toVariable)
+              Int32Literal(typeToTag(boxedFunType)) +: FunctionPointer(function.id) +: fv.map(_.toVariable)
             ),
             funRecordType
           )
@@ -591,8 +609,9 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     //println("*** MANAGER ***")
     //manager.newRecords foreach (r => println(r._2.asString))
     //println("*** RECORDS ***")
-    ret.records foreach (r => println(r._2.asString))
-    ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
+    //ret.records foreach (r => println(r._2.asString))
+    //ret.functions foreach (r => println(r._2.asString))
+    //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
 
     // println(ret)
     ret

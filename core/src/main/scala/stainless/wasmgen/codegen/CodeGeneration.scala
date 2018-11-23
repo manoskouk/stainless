@@ -103,7 +103,7 @@ trait CodeGeneration {
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
 
-      case t.IfExpr(cond, thenn, elze) =>
+      case t.IfExprI32(cond, thenn, elze) =>
         If(
           FreshIdentifier("label").uniqueName,
           transform(cond),
