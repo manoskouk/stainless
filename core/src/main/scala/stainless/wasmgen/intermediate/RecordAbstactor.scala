@@ -476,8 +476,6 @@ private [wasmgen] class ExprTransformer (
   */
 class RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
 
-
- 
   def transform(sort: s.ADTSort, env: Env): (t.RecordADTSort, Seq[t.ConstructorSort]) = {
     val sortCodes = new inox.utils.UniqueCounter[Unit]
     locally {
@@ -612,8 +610,8 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     //ret.records foreach (r => println(r._2.asString))
     //ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
+    //println(ret)
 
-    // println(ret)
     ret
   }
 }
