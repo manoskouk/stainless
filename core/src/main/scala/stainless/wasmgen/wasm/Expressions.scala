@@ -17,7 +17,7 @@ object Expressions { self =>
   trait RelOp
   trait SignedOp {
     val sign: Sign
-    private val name = getClass.getName.init
+    private val name = getClass.getSimpleName
 
     override def toString = s"${name}_$sign"
   }

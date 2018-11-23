@@ -23,11 +23,11 @@ object Printer {
   }
 
   private def mkGlobal(g: ValDef): Document = {
-    Lined(Seq(s"(global $$${g.name} ${g.tpe} ", doc(typeToZero(g.tpe)), ")"))
+    Lined(Seq(s"(global $$${g.name} (mut ${g.tpe}) ", doc(typeToZero(g.tpe)), ")"))
   }
 
   private def doc(t: Table): Document = {
-    s"(table anyfunc (elem ${t.funs.mkString(" ")} ))"
+    s"(table anyfunc (elem ${t.funs.map("$" + _).mkString(" ")} ))"
   }
 
   private def doc(imp: Import): Document = {
@@ -84,11 +84,13 @@ object Printer {
       case F64Const(value) => s"(f64.const $value)"
       case If(label, cond, thenn, elze) =>
         Stacked(
-          s"(if $$$label ${expr.getType}",
+          s"(if $$$label (result ${expr.getType})",
           Indented(doc(cond)),
+          "(then",
           Indented(doc(thenn)),
+          ") (else ",
           Indented(doc(elze)),
-          ")"
+          "))"
         )
       case Loop(label, body) =>
         Stacked(
@@ -117,8 +119,8 @@ object Printer {
         )
       case Call_Indirect(_, fun, args) =>
         Stacked(
-          "(call_indirect",
-          Indented(Stacked( (fun +: args) map doc: _*)),
+          s"(call_indirect (param ${args.map(_.getType).mkString(" ")}) (result ${expr.getType})",
+          Indented(Stacked( (args :+ fun) map doc: _*)), // It think function goes last
           ")"
         )
       case Load(tpe, truncate, expr) =>
