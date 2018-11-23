@@ -83,7 +83,7 @@ class FileWriter(module: Module) {
           |loadWebAssembly('$moduleFile', importObject).then(function(instance) {
           |""".stripMargin ++
           module.functions.filter(f => /*toRun(f) &&*/ f.args.isEmpty).map { f =>
-      s"""|  instance.exports.${f.name}();""".stripMargin
+      s"""|  console.log(instance.exports.${f.name}());""".stripMargin // FIXME: Add printing for all types to the wasm side
           }.mkString("\n") ++
        """|}).catch( function(error) {
           |  process.exit(1)
