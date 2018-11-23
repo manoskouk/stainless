@@ -24,7 +24,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
   )
   protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
   protected def mkTable(s: t.Symbols) = Table(
-    s.functions.values.toSeq.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
+    s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
   )
 
   protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr = {

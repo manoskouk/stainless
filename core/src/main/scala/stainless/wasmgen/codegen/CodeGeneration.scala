@@ -69,7 +69,7 @@ trait CodeGeneration {
     val imports = mkImports(s)
     val globals = mkGlobals(s)
     val tab = mkTable(s)
-    val funs = s.functions.values.toSeq map (transform(_)(FunEnv(s, GlobalsHandler(globals), tab)))
+    val funs = s.functions.values.toList map (transform(_)(FunEnv(s, GlobalsHandler(globals), tab)))
     Module("program", imports, globals, tab, funs)
   }
 
