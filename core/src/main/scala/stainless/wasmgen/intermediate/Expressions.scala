@@ -6,14 +6,20 @@ import inox.ast.Identifier
 
 trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
-  sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr {
-    def getType(implicit s: Symbols): Type = {
-      checkParamTypes(fields, tpe.getRecord.flattenFields, tpe)
+  sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr with CachingTyped {
+    protected def computeType(implicit s: Symbols): Type = {
+      val res = checkParamTypes(fields, tpe.getRecord.flattenFields, tpe)
+      if (res == Untyped) {
+        println(this)
+        println(fields.map(_.getType))
+        println(tpe.getRecord.flattenFields map (_.getType))
+      }
+      res
     }
   }
 
   sealed case class RecordSelector(record: Expr, selector: Identifier) extends Expr with CachingTyped {
-    override protected def computeType(implicit s: Symbols) = {
+    protected def computeType(implicit s: Symbols) = {
       record.getType match {
         case RecordType(id) =>
           s.getRecord(id).flattenFields
@@ -26,15 +32,15 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
   }
 
   sealed case class FunctionPointer(id: Identifier) extends Expr with CachingTyped {
-    override protected def computeType(implicit s: Symbols): Type = {
+    protected def computeType(implicit s: Symbols): Type = {
       s.lookupFunction(id)
         .map(tfd => FunctionType(tfd.params.map(_.getType), tfd.getType))
         .getOrElse(Untyped)
     }
   }
 
-  sealed case class CastDown(e: Expr, subtype: RecordType) extends Expr {
-    def getType(implicit s: Symbols): Type = {
+  sealed case class CastDown(e: Expr, subtype: RecordType) extends Expr with CachingTyped {
+    protected def computeType(implicit s: Symbols): Type = {
       e.getType match {
         case supertype: RecordType if subtype conformsWith supertype => subtype
         case _ => Untyped
@@ -42,8 +48,8 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
-  sealed case class CastUp(e: Expr, supertype: RecordType) extends Expr {
-    def getType(implicit s: Symbols): Type = e.getType match {
+  sealed case class CastUp(e: Expr, supertype: RecordType) extends Expr with CachingTyped {
+    protected def computeType(implicit s: Symbols): Type = e.getType match {
       case subtype: RecordType if subtype conformsWith supertype => supertype
       case _ => Untyped
     }
@@ -58,8 +64,8 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
   }
 
   /** $encodingof `... == ...` */
-  sealed case class EqualsI32(lhs: Expr, rhs: Expr) extends Expr with CachingTyped {
-    override protected def computeType(implicit s: Symbols): Type = {
+  sealed case class EqualsI32(lhs: Expr, rhs: Expr) extends Expr {
+    def getType(implicit s: Symbols): Type = {
       if (lhs.getType == rhs.getType) Int32Type()
       else Untyped
     }
@@ -95,20 +101,4 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
-  // Helpers for unsigned literals
-  object IndexLiteral {
-    def apply(x: Int): BVLiteral = BVLiteral(false, BigInt(x), 32)
-    def unapply(e: Expr): Option[Int] = e match {
-      case b @ BVLiteral(false, _, 32) => Some(b.toBigInt.toByte)
-      case _ => None
-    }
-  }
-
-  object ByteLiteral {
-    def apply(x: Byte): BVLiteral = BVLiteral(false, BigInt(x), 8)
-    def unapply(e: Expr): Option[Byte] = e match {
-      case b @ BVLiteral(false, _, 8) => Some(b.toBigInt.toByte)
-      case _ => None
-    }
-  }
 }

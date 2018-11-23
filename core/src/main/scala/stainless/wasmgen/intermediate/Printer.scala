@@ -6,6 +6,8 @@ trait Printer extends stainless.ast.Printer {
   protected val trees: Trees
   import trees._
   override protected def ppBody(tree: Tree)(implicit ctx: PrinterContext): Unit = tree match {
+    case bvl: BVLiteral => ppBody(IntegerLiteral(bvl.toBigInt))
+
     case Record(tpe, fields) => p"new $tpe($fields)"
 
     case RecordSelector(record, selector) => p"$record.$selector"

@@ -3,7 +3,6 @@
 package stainless.wasmgen.intermediate
 
 import inox.ast.{FreshIdentifier, Identifier}
-//import inox.utils.Lazy
 
 trait Definitions extends stainless.ast.Definitions { self: Trees =>
   override type Symbols >: Null <: AbstractSymbols
@@ -15,7 +14,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     def lookupRecord(id: Identifier): Option[RecordSort] = records.get(id)
     def getRecord(id: Identifier): RecordSort = records.getOrElse(id, throw ADTLookupException(id))
 
-    def childrenOf(id: Identifier) = records.collect{ case (_, cs:ConstructorSort) if cs.parent.contains(id) => cs }
+    //def childrenOf(id: Identifier): Seq[ConstructorSort] = records.collect{ case (_, cs:ConstructorSort) if cs.parent.contains(id) => cs }
   }
 
   // Used to tag dynamically called functions
@@ -74,14 +73,19 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   private[wasmgen] val typeTagID = FreshIdentifier("code")
   private[wasmgen] val typeTag = ValDef(typeTagID, Int32Type())
   private[wasmgen] val funPointerId = FreshIdentifier("funP")
-  import scala.collection.mutable.{Map => MMap}
-  private[wasmgen] val funSortIds = MMap[FunctionType, Identifier]()
   private[wasmgen] val boxedValueId = FreshIdentifier("value")
 
   object AnyRefSort extends RecordSort(FreshIdentifier("anyref"), None, Seq(typeTag), Seq())
 
+  private def prependParamType(tpe: Type, ft: FunctionType) =
+    FunctionType(tpe +: ft.from, ft.to)
+  // Sorts that represent function pointers to a function of `original` type ft
+  // modify this ft to include as parameter a pointer of this type
   sealed class FunPointerSort(id: Identifier, ft: FunctionType)
-    extends RecordSort(id, Some(AnyRefSort.id), Seq(ValDef(funPointerId, ft)))
+    extends RecordSort(
+      id, Some(AnyRefSort.id),
+      Seq(ValDef(funPointerId, prependParamType(RecordType(id), ft)))
+    )
 
   sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])
     extends RecordSort(FreshIdentifier("closure"), Some(parent), env)
