@@ -29,16 +29,20 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr = {
     implicit val gh = env.gh
+    implicit val lh = env.lh
     // offsets for fields, with last element being the new memory boundary
     val offsets = exprs.scanLeft(0)(_ + _.getType.size)
+    val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
     Sequence(
-      GetGlobal(memB) +: // Leave the original memB, aka the pointer to the new rec, on the bottom of the stack to be returned
+      SetLocal(memCache, GetGlobal(memB)) +:
+      // Already set new memB because fields may also need new memory
+      SetGlobal(memB, add(GetLocal(memCache), I32Const(offsets.last))) +:
       exprs
         .zip(offsets)
         .map { case (e, off) =>
-          Store(None, add(GetGlobal(memB), I32Const(off)), e)
+          Store(None, add(GetLocal(memCache), I32Const(off)), e)
         } :+
-      SetGlobal(memB, add(GetGlobal(memB), I32Const(offsets.last)))
+      GetLocal(memCache)
     )
   }
 
@@ -66,14 +70,16 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit env: Env): Expr = {
     implicit val lh = env.lh
     implicit val gh = env.gh
+    val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
     val len  = lh.getFreshLocal(freshLabel("length"), i32)
     val ind  = lh.getFreshLocal(freshLabel("index"),  i32)
     val loop = freshLabel("loop")
-    def indToPtr(e: Expr) = add(GetGlobal(memB), add(I32Const(4), mul(I32Const(base.size), e)))
+    def indToPtr(e: Expr) = add(GetLocal(memCache), add(I32Const(4), mul(I32Const(base.size), e)))
     Sequence( Seq(
-      GetGlobal(memB), // Leave the original memB, aka the pointer to the new array, on the bottom of the stack to be returned
+      SetLocal(memCache, GetGlobal(memB)),
+      SetGlobal(memB, indToPtr(GetLocal(len))),
       SetLocal(len, length),
-      Store(None, GetGlobal(memB), GetLocal(len)),
+      Store(None, GetLocal(memCache), GetLocal(len)),
       SetLocal(ind, I32Const(0))
     ) ++ (init match {
       case Some(elem) =>
@@ -89,7 +95,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       case None =>
         Seq()
     }) ++ Seq(
-      SetGlobal(memB, indToPtr(GetLocal(len)) )
+      GetLocal(memCache)
     ))
   }
 
