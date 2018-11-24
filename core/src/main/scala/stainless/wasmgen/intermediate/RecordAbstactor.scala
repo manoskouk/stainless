@@ -173,16 +173,12 @@ private [wasmgen] class ExprTransformer (
         else
           transform(body, env)
       case s.Require(pred, body) =>
-        if (keepContracts)
-          IfExprI32(transform(pred, env), transform(body, env), NoTree(transform(body.getType, env)))
-        else
-          transform(body, env)
-      case s.Ensuring(body, s.Lambda(s.ValDef(id, tp, _), lbody)) =>
+        transform(s.Assume(pred, body), env)
+      case s.Ensuring(body, s.Lambda(Seq(vd), lbody)) =>
         if (keepContracts) {
-          val trType = transform(tp, env)
-          val trV = Variable(id, trType, Seq())
-          Let(trV.toVal, transform(body, env),
-            IfExprI32(transform(lbody, env), trV, NoTree(trType))
+          val trV = transform(vd, env)
+          Let(trV, transform(body, env),
+            IfExprI32(transform(lbody, env), trV.toVariable, NoTree(trv.))
           )
         } else {
           transform(body, env)
