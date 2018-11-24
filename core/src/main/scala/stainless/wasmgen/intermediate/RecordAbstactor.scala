@@ -178,7 +178,7 @@ private [wasmgen] class ExprTransformer (
         if (keepContracts) {
           val trV = transform(vd, env)
           Let(trV, transform(body, env),
-            IfExprI32(transform(lbody, env), trV.toVariable, NoTree(trv.))
+            IfExprI32(transform(lbody, env), trV.toVariable, NoTree(trV.tpe))
           )
         } else {
           transform(body, env)
@@ -250,8 +250,10 @@ private [wasmgen] class ExprTransformer (
               FreshIdentifier("lambda"), Seq(),
               envParam +: boxedParams,
               AnyRefType,
-              extractEnv(envParam.toVariable,
-                unboxParams(boxedParams,
+              extractEnv(
+                envParam.toVariable,
+                unboxParams(
+                  boxedParams,
                   boxResult(body))),
               Seq(Dynamic)
             )

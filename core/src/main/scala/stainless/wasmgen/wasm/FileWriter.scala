@@ -86,6 +86,7 @@ class FileWriter(module: Module) {
         s"|  console.log(instance.exports.${f.name}());\n".stripMargin // FIXME: Add printing for all types to the wasm side
           }.mkString ++
        """|}).catch( function(error) {
+          |  console.log("Error in wasm application")
           |  process.exit(1)
           |})
           |""".stripMargin
@@ -130,7 +131,8 @@ class FileWriter(module: Module) {
           "wat2wasm utility was not found under expected directory or in system path, " +
           "or did not have permission to execute"
         )
-      case _: RuntimeException =>
+      case e: RuntimeException =>
+        println(e.getMessage)
         ctx.reporter.fatalError(
           s"wat2wasm failed to translate WebAssembly text file ${withExt("wat")} to binary"
         )
