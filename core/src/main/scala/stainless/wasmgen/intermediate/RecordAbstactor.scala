@@ -3,6 +3,7 @@
 package stainless.wasmgen
 package intermediate
 
+import stainless.ast.SymbolIdentifier
 import stainless.{FreshIdentifier, Identifier}
 
 trait Transformer extends stainless.transformers.Transformer {
@@ -391,14 +392,14 @@ private [wasmgen] class ExprTransformer (
       // Tuples
       case s.Tuple(exprs) =>
         transform(s.ADT(
-          impSyms.lookup[s.ADTSort](s"Tuple${exprs.size}").id,
+          impSyms.lookup[s.ADTSort](s"Tuple${exprs.size}").constructors.head.id,
           exprs map (_.getType),
           exprs
         ), env)
       case s.TupleSelect(tuple, index) =>
         val size = tuple.getType.asInstanceOf[s.TupleType].bases.size
         val id = impSyms.lookup[s.ADTSort](s"Tuple$size").constructors.head.fields(index - 1).id
-        transform(s.ADTSelector(tuple, id), env)
+        t.RecordSelector(transform(tuple, env), id)
 
       // Sets
       case s.FiniteSet(elements, base) => ???
@@ -543,7 +544,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
   private def mkTupleSort(size: Int): s.ADTSort = {
     require(size >= 2)
     val dsl = new inox.ast.DSL { val trees: s.type = s }
-    val sortName = FreshIdentifier(s"Tuple$size")
+    val sortName = SymbolIdentifier(s"Tuple$size")
     val constrName = FreshIdentifier(s"Tuple${size}C")
     dsl.mkSort(sortName)( (1 to size).map(ind => s"T$ind") : _* )( tps =>
       Seq((constrName,
@@ -576,11 +577,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     val sorts = syms.sorts.values.toSeq.map(transform(_, env0))
     val allSorts = sorts.flatMap(s => s._1 +: s._2).map(s => s.id -> s).toMap
 
-    // (1.2) Find function sorts
-    val funSorts = Map() //syms.functions.values.toSeq
-      //.map(fd => discoverFunSorts(fd.body.get))
-      //.foldLeft(Map[s.FunctionType, t.ClosureSort]())(_ ++ _)
-
     // (1.2) These are the program types (initial symbols)
     val initSymbols = t.Symbols(allSorts ++ t.builtinSortsMap, Map())
 
@@ -608,7 +604,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     //println("*** RECORDS ***")
     //ret.records foreach (r => println(r._2.asString))
     //ret.functions foreach (r => println(r._2.asString))
-    //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
+    ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 
     ret
