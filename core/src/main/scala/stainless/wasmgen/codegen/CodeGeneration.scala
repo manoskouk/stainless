@@ -29,7 +29,7 @@ trait CodeGeneration {
     def fEnv = FunEnv(s, gh, tab)
   }
 
-  protected def freshLabel(s: String) = FreshIdentifier(s).uniqueName
+  protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
 
   protected def mkImports(symbols: t.Symbols): Seq[Import] = {
     Seq(Import("sys", "printString", FunSig("printString", Seq(i32), i32)))
@@ -67,7 +67,14 @@ trait CodeGeneration {
     op(transform(lhs), transform(rhs))
   }
 
-  def transform(tpe: t.Type)(implicit s: t.Symbols): Type
+  def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
+    case t.BooleanType() => i32
+    case t.RealType() => f64
+    case t.BVType(_, size) => if (size == 64) i64 else i32
+    case t.ArrayType(_) | t.RecordType(_) =>
+      sys.error("Reference types are left abstract " +
+        "and have to be implemented in a subclass of wasm CodeGeneration")
+  }
 
   final def transform(s: t.Symbols): Module = {
     val imports = mkImports(s)
