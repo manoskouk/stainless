@@ -145,7 +145,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
   }
 
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
-    case t.IntegerType() => i64
+    case t.BooleanType() => i32
     case t.RealType() => f64
     case t.BVType(_, size) => if (size == 64) i64 else i32
     case t.ArrayType(_) => i32

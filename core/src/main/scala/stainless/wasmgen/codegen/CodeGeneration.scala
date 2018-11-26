@@ -103,27 +103,21 @@ trait CodeGeneration {
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
 
-      case t.IfExprI32(cond, thenn, elze) =>
+      case t.IfExpr(cond, thenn, elze) =>
         If(
           FreshIdentifier("label").uniqueName,
           transform(cond),
           transform(thenn),
           transform(elze)
         )
-      case t.EqualsI32(lhs, rhs) =>
+      case t.Equals(lhs, rhs) =>
         mkBin(EQ, lhs, rhs)
 
       case bvl@t.BVLiteral(signed, value, size) =>
         if (size <= 32) I32Const(bvl.toBigInt.toInt)
         else I64Const(bvl.toBigInt.toLong)
-
-      case t.IntegerLiteral(value) =>
-        // TODO: Represent mathematical integers adequately
-        I64Const(
-          if (value.isValidLong) value.toLong
-          else if (value > Int.MaxValue) Int.MaxValue
-          else Int.MinValue
-        )
+      case t.BooleanLiteral(value) =>
+        I32Const(if (value) 1 else 0)
 
       case t.Record(tpe, fields) =>
         mkRecord(tpe, fields map transform)
@@ -203,6 +197,17 @@ trait CodeGeneration {
         Wrap(transform(newType), transform(expr))
       case t.BVWideningCast(expr, newType) =>
         Extend(transform(newType), typeToSign(expr.getType), transform(expr))
+
+      case t.And(exprs) =>
+        exprs map transform reduceRight[Expr] { case (e1, e2) =>
+          If(FreshIdentifier("label").uniqueName, e1, e2, I32Const(0))
+        }
+      case t.Or(exprs) =>
+        exprs map transform reduceRight[Expr] { case (e1, e2) =>
+          If(FreshIdentifier("label").uniqueName, e1, I32Const(1), e2)
+        }
+      case t.Not(expr) =>
+        Binary(xor, typeToZero(i32), transform(expr))
     }
   }
 }

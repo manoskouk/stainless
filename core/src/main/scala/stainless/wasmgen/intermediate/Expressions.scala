@@ -8,13 +8,7 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
   sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = {
-      val res = checkParamTypes(fields, tpe.getRecord.flattenFields, tpe)
-      if (res == Untyped) {
-        println(this)
-        println(fields.map(_.getType))
-        println(tpe.getRecord.flattenFields map (_.getType))
-      }
-      res
+      checkParamTypes(fields, tpe.getRecord.flattenFields, tpe)
     }
   }
 
@@ -22,9 +16,13 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     protected def computeType(implicit s: Symbols) = {
       record.getType match {
         case RecordType(id) =>
-          s.getRecord(id).flattenFields
-           .find(_.id == selector).get
-           .tpe
+          val fl = s.getRecord(id).flattenFields
+          fl.find(_.id == selector).getOrElse {
+            println(fl)
+            println(this)
+            println(record.getType)
+            sys.error("Whoot")
+          }.tpe
         case _ =>
           Untyped
       }
@@ -61,21 +59,6 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
   sealed case class Sequence(e1: Expr, e2: Expr) extends Expr {
     def getType(implicit s: Symbols) = e2.getType
-  }
-
-  /** $encodingof `... == ...` */
-  sealed case class EqualsI32(lhs: Expr, rhs: Expr) extends Expr {
-    def getType(implicit s: Symbols): Type = {
-      if (lhs.getType == rhs.getType) Int32Type()
-      else Untyped
-    }
-  }
-
-  sealed case class IfExprI32(cond: Expr, thenn: Expr, elze: Expr) extends Expr {
-    def getType(implicit s: Symbols) = (cond.getType, thenn.getType, elze.getType) match {
-      case (Int32Type(), tt, et) if tt == et => tt
-      case _ => Untyped
-    }
   }
 
   sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {

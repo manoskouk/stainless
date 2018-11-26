@@ -18,23 +18,9 @@ trait Printer extends stainless.ast.Printer {
 
     case CastUp(e, tp) => p"$e.asInstanceOf[$tp]"
 
-    case EqualsI32(lhs, rhs) => p"$lhs == $rhs"
-
-    case IfExprI32(c, t, ie: IfExprI32) =>
-      optP {
-        p"""|if ($c) {
-            |  $t
-            |} else $ie"""
-      }
-
-    case IfExprI32(c, t, e) =>
-      optP {
-        p"""|if ($c) {
-            |  $t
-            |} else {
-            |  $e
-            |}"""
-      }
+    case Sequence(e1, e2) =>
+      p"$e1;"
+      p"$e2"
 
     case Output(msg) => p"println($msg)"
 

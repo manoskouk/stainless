@@ -19,7 +19,6 @@ trait Transformer extends stainless.transformers.Transformer {
     import t._
     tp match {
       case s.Untyped => Untyped
-      case s.BooleanType() => Int32Type()
       case s.UnitType() => Int32Type()
       case s.CharType() => Int32Type()
       case s.IntegerType() => Int64Type() // FIXME: Implement big integers properly
@@ -98,13 +97,14 @@ private [wasmgen] class ExprTransformer (
 
   private def typeToTag(tpe: t.Type) = tpe match {
     case BVType(_, 32) => 0
+    case BooleanType() => 0
     case BVType(_, 64) => 1
     case RealType() => 3
     case FunctionType(_, _) => 4
   }
 
   private def isElementaryType(tpe: t.Type) = tpe match {
-    case t.BVType(_, _) | t.IntegerType() | t.RealType() => true
+    case t.BVType(_, _) | t.IntegerType() | t.RealType() | BooleanType() => true
     case _ => false
   }
 
@@ -148,12 +148,17 @@ private [wasmgen] class ExprTransformer (
     implicit val impSyms = env._1
     e match {
       // Literals
-      case s.BooleanLiteral(value) =>
-        Int32Literal(if (value) 1 else 0)
       case s.UnitLiteral() =>
         Int32Literal(0)
       case s.CharLiteral(value) =>
         Int32Literal(value)
+      case s.IntegerLiteral(value) =>
+        // TODO: Represent mathematical integers adequately
+        t.Int64Literal(
+          if (value.isValidLong) value.toLong
+          else if (value > Int.MaxValue) Int.MaxValue
+          else Int.MinValue
+        )
 
       // Misc.
       case s.Annotated(body, flags) =>
@@ -161,16 +166,11 @@ private [wasmgen] class ExprTransformer (
       case s.Error(tpe, description) =>
         Sequence(Output(transform(s.StringLiteral(description), env)), NoTree(transform(tpe, env)))
       case me: s.MatchExpr => transform(impSyms.matchToIfThenElse(me), env)
-      case s.IfExpr(cond, thenn, elze) =>
-        t.IfExprI32(transform(cond, env), transform(thenn, env), transform(elze, env))
-      case s.Equals(lhs, rhs) =>
-        // Equality is left abstract for now and is lowered later
-        t.EqualsI32(transform(lhs, env), transform(rhs, env))
 
       // Contracts
       case s.Assume(pred, body) =>
         if (keepContracts)
-          IfExprI32(transform(pred, env), transform(body, env), NoTree(transform(body.getType, env)))
+          IfExpr(transform(pred, env), transform(body, env), NoTree(transform(body.getType, env)))
         else
           transform(body, env)
       case s.Require(pred, body) =>
@@ -179,14 +179,14 @@ private [wasmgen] class ExprTransformer (
         if (keepContracts) {
           val trV = transform(vd, env)
           Let(trV, transform(body, env),
-            IfExprI32(transform(lbody, env), trV.toVariable, NoTree(trV.tpe))
+            IfExpr(transform(lbody, env), trV.toVariable, NoTree(trV.tpe))
           )
         } else {
           transform(body, env)
         }
       case s.Assert(pred, error, body) =>
         if (keepContracts)
-          IfExprI32(
+          IfExpr(
             transform(pred, env),
             transform(body, env),
             Error(transform(body.getType, env), error getOrElse "")
@@ -277,10 +277,7 @@ private [wasmgen] class ExprTransformer (
         closure
 
       // Booleans
-      case s.And(exprs) => exprs.map(transform(_, env)).reduceRight(BVAnd)
-      case s.Or(exprs)  => exprs.map(transform(_, env)).reduceRight(BVOr)
       case s.Implies(lhs, rhs) => transform(s.Or(lhs, s.Not(rhs)), env)
-      case s.Not(expr) => BVNot(transform(expr, env))
 
       // ADTs
       case s.ADT(id, tps, args) =>
@@ -297,7 +294,7 @@ private [wasmgen] class ExprTransformer (
       case s.IsConstructor(expr, id) =>
         // We need to compare the constructor code of given value
         // to the code corresponding to constructor 'id'
-        EqualsI32(
+        Equals(
           RecordSelector(transform(expr, env), typeTagID),
           Int32Literal(initSorts(id).asInstanceOf[ConstructorSort].typeTag)
         )
@@ -398,8 +395,14 @@ private [wasmgen] class ExprTransformer (
         ), env)
       case s.TupleSelect(tuple, index) =>
         val size = tuple.getType.asInstanceOf[s.TupleType].bases.size
-        val id = impSyms.lookup[s.ADTSort](s"Tuple$size").constructors.head.fields(index - 1).id
-        t.RecordSelector(transform(tuple, env), id)
+        val constr = impSyms.lookup[s.ADTSort](s"Tuple$size").constructors.head
+        val selector = constr.fields(index - 1).id
+        maybeUnbox(
+          t.RecordSelector(t.CastDown(transform(tuple, env), RecordType(constr.id)), selector),
+          AnyRefType,
+          transform(e.getType, env),
+          env
+        )
 
       // Sets
       case s.FiniteSet(elements, base) => ???
@@ -514,7 +517,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     def genEq(e1: Expr, e2: Expr): Expr = {
       e1.getType match {
         case RecordType(id) => FunctionInvocation(id, Seq(), Seq(e1, e2))
-        case _ => EqualsI32(e1, e2)
+        case _ => Equals(e1, e2)
       }
     }
 
@@ -528,13 +531,13 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
         Int32Type(),
         { case Seq(v1, v2) =>
 
-          ( EqualsI32(RecordSelector(v1, typeTagID), RecordSelector(v2, typeTagID)) +:
+          ( Equals(RecordSelector(v1, typeTagID), RecordSelector(v2, typeTagID)) +:
             sort.fields.map( f =>
               genEq(
                 RecordSelector(CastDown(v1, RecordType(sort.id)), f.id),
                 RecordSelector(CastDown(v2, RecordType(sort.id)), f.id)
               )
-            )).reduceLeft(IfExprI32(_, Int32Literal(1), _)
+            )).reduceLeft(IfExpr(_, Int32Literal(1), _)
           )
         }
       )
@@ -598,7 +601,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
       /*equalities ++*/ funs ++ manager.newFunctions
     )
 
-    //println(ret.asString)
     //println("*** MANAGER ***")
     //manager.newRecords foreach (r => println(r._2.asString))
     //println("*** RECORDS ***")

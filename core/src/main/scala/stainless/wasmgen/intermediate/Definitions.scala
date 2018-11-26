@@ -37,7 +37,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     //def typeArgs: Seq[TypeParameter] = tparams.map(_.tp)
 
     def lookupParent(implicit s: Symbols): Option[RecordSort] = {
-      parent.map(p => s.getRecord(p))
+      parent.map(s.getRecord)
     }
     def flattenFields(implicit s: Symbols): Seq[ValDef] = {
       lookupParent.toSeq.flatMap(_.flattenFields) ++ fields
@@ -70,7 +70,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   //    definition.ancestors
   //}
 
-  private[wasmgen] val typeTagID = FreshIdentifier("code")
+  private[wasmgen] val typeTagID = FreshIdentifier("typeTag")
   private[wasmgen] val typeTag = ValDef(typeTagID, Int32Type())
   private[wasmgen] val funPointerId = FreshIdentifier("fPointer")
   private[wasmgen] val boxedValueId = FreshIdentifier("value")
@@ -104,7 +104,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     extends RecordSort(FreshIdentifier("Boxed" + tpe.asString(PrinterOptions())), Some(AnyRefSort.id), Seq(ValDef(boxedValueId, tpe)))
 
   val boxedSorts: Map[Type, BoxedSort] = {
-    Seq(BVType(true, 32), BVType(false, 32), BVType(true, 64), BVType(false, 64), RealType())
+    Seq(BVType(true, 32), BVType(false, 32), BVType(true, 64), BVType(false, 64), RealType(), BooleanType())
       .map { tpe => tpe -> new BoxedSort(tpe) }
       .toMap
   }
