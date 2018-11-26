@@ -214,7 +214,7 @@ trait CodeGeneration {
           If(freshLabel("label"), e1, I32Const(1), e2)
         }
       case t.Not(expr) =>
-        Binary(xor, typeToZero(i32), transform(expr))
+        Binary(sub, I32Const(1), transform(expr))
     }
   }
 }
