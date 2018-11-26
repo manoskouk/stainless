@@ -32,7 +32,7 @@ trait CodeGeneration {
   protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
 
   protected def mkImports(symbols: t.Symbols): Seq[Import] = {
-    Seq(Import("sys", "printString", FunSig("_printString_", Seq(i32), i32)))
+    Seq(Import("system", "printString", FunSig("_printString_", Seq(i32), i32)))
   }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
