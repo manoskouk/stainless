@@ -67,14 +67,14 @@ object Printer {
     expr match {
       case Binary(op, lhs, rhs) =>
         Stacked(
-          s"(${expr.getType}.$op",
+          s"(${lhs.getType}.$op",
           Indented(doc(lhs)),
           Indented(doc(rhs)),
           ")"
         )
       case Unary(op, e) =>
         Stacked(
-          s"(${expr.getType}.$op",
+          s"(${e.getType}.$op",
           Indented(doc(e)),
           ")"
         )
