@@ -19,9 +19,10 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   private def freshLabel(s: String) = FreshIdentifier(s).uniqueName
 
-  protected def mkImports(s: t.Symbols) = Seq(
+  override protected def mkImports(s: t.Symbols) = Seq(
     Import("system", "mem", Memory(100))
-  )
+  ) ++ super.mkImports(s)
+
   protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
   protected def mkTable(s: t.Symbols) = Table(
     s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
@@ -49,12 +50,13 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr = {
     implicit val s = env.s
     val fields = rt.getRecord.flattenFields
+    val tpe = transform(fields.find(_.id == id).get.getType)
     val sizeBefore = fields
       .takeWhile(_.id != id)
       .map(fd => transform(fd.getType).size)
       .sum
     Load(
-      expr.getType, None,
+      tpe, None,
       add(expr, I32Const(sizeBefore))
     )
   }

@@ -29,7 +29,9 @@ trait CodeGeneration {
     def fEnv = FunEnv(s, gh, tab)
   }
 
-  protected def mkImports(symbols: t.Symbols): Seq[Import]
+  protected def mkImports(symbols: t.Symbols): Seq[Import] = {
+    Seq(Import("sys", "printString", FunSig("printString", Seq(i32), i32)))
+  }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
 
@@ -99,9 +101,12 @@ trait CodeGeneration {
           SetLocal(vd.id.uniqueName, transform(value)),
           transform(body)
         ))
-      case t.Output(msg) => ???
+      case t.Output(msg) =>
+        Call("printString", i32, Seq(transform(msg)))
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
+      case t.Sequence(es) =>
+        Sequence(es map transform)
 
       case t.IfExpr(cond, thenn, elze) =>
         If(

@@ -164,7 +164,10 @@ private [wasmgen] class ExprTransformer (
       case s.Annotated(body, flags) =>
         transform(body, env)
       case s.Error(tpe, description) =>
-        Sequence(Output(transform(s.StringLiteral(description), env)), NoTree(transform(tpe, env)))
+        Sequence(Seq(
+          Output(transform(s.StringLiteral(description), env)),
+          NoTree(transform(tpe, env))
+        ))
       case me: s.MatchExpr => transform(impSyms.matchToIfThenElse(me), env)
 
       // Contracts
@@ -189,7 +192,7 @@ private [wasmgen] class ExprTransformer (
           IfExpr(
             transform(pred, env),
             transform(body, env),
-            Error(transform(body.getType, env), error getOrElse "")
+            transform(s.Error(body.getType, error getOrElse ""), env)
           )
         else transform(body, env)
 
@@ -334,29 +337,34 @@ private [wasmgen] class ExprTransformer (
         val arr = Variable.fresh("array", ArrayType(transform(base, env)))
         Let(arr.toVal,
           NewArray(Int32Literal(elems.length), transform(base, env), None),
-          elems.zipWithIndex.map{
+          Sequence(elems.zipWithIndex.map{
             case (elem, index) => ArraySet(arr, Int32Literal(index), transform(elem, env))
-          }.reduceRight(Sequence)
+          } :+ arr)
         )
       case s.LargeArray(elems, default, size, base) =>
         val arr = Variable.fresh("array", ArrayType(transform(base, env)))
         Let(arr.toVal,
           NewArray(transform(size, env), transform(base, env), Some( transform(default, env))),
-          elems.map{
+          Sequence( elems.toSeq.sortBy(_._1).map{
             case (index, elem) => ArraySet(arr, Int32Literal(index), transform(elem, env))
-          }.reduceRight(Sequence)
+          } :+ arr)
         )
       case s.ArrayUpdated(array, index, value) =>
         // TODO: Copy functional arrays or analyze when we don't need to do so
-        t.ArraySet(transform(array, env), transform(index, env), transform(value, env))
+        val arr = Variable.fresh("array", transform(array.getType, env))
+        Let(arr.toVal, transform(array, env),
+          t.Sequence(Seq(
+            t.ArraySet(arr, transform(index, env), transform(value, env)),
+            arr
+          ) ) )
 
       // Strings
       case s.StringLiteral(str) =>
-        val strV = Variable.fresh(str, StrType)
+        val strV = Variable.fresh("strConst", StrType)
         Let(strV.toVal, NewArray(Int32Literal(str.length), Int32Type(), None),
-          str.zipWithIndex.map{
+          Sequence(str.zipWithIndex.map{
             case (ch, index) => ArraySet(strV, Int32Literal(index), Int32Literal(ch.toByte))
-          }.reduceRight(Sequence)
+          } :+ strV)
         )
       case s.StringConcat(lhs, rhs) =>
         val l = Variable.fresh("lhs", StrType)
@@ -367,10 +375,11 @@ private [wasmgen] class ExprTransformer (
             Let(
               newArray.toVal,
               NewArray(Plus(ArrayLength(l), ArrayLength(r)), Int32Type(), None),
-              Sequence(
+              Sequence(Seq(
                 ArrayCopy(l, newArray, Int32Literal(0), ArrayLength(l)),
-                ArrayCopy(r, newArray, ArrayLength(l), Plus(ArrayLength(l), ArrayLength(r)))
-              )
+                ArrayCopy(r, newArray, ArrayLength(l), Plus(ArrayLength(l), ArrayLength(r))),
+                newArray
+              ))
             )))
       case s.SubString(expr, start, end) =>
         val startV = Variable.fresh("start", Int32Type())
@@ -571,6 +580,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
   //}
 
   def transform(syms0: s.Symbols): t.Symbols = {
+
     // (0) Make tuple sorts
     val syms = syms0.withSorts((2 to 8).map(mkTupleSort))
     val manager = new SymbolsManager
@@ -606,7 +616,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     //println("*** RECORDS ***")
     //ret.records foreach (r => println(r._2.asString))
     //ret.functions foreach (r => println(r._2.asString))
-    ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
+    //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 
     ret

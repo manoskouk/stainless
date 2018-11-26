@@ -18,9 +18,12 @@ trait Printer extends stainless.ast.Printer {
 
     case CastUp(e, tp) => p"$e.asInstanceOf[$tp]"
 
-    case Sequence(e1, e2) =>
-      p"$e1;"
-      p"$e2"
+    case Sequence(Seq(one)) => p"$one"
+
+    case Sequence(more) =>
+      p"""|${more.head};
+          |"""
+      ppBody(Sequence(more.tail))
 
     case Output(msg) => p"println($msg)"
 
@@ -28,6 +31,9 @@ trait Printer extends stainless.ast.Printer {
 
     case ArrayCopy(from, to, start, end) =>
       p"Array.copy($from, $to, $start, $end)"
+
+    case ArraySet(array, index, value) =>
+      p"$array($index) = $value"
 
     case RecordType(id) =>
       p"$id"

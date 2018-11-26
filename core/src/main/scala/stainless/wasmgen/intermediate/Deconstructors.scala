@@ -41,9 +41,9 @@ trait TreeDeconstructor extends stainless.ast.TreeDeconstructor {
       (_, _, es, _, _) => t.Output(es.head)
     )
 
-    case s.Sequence(e1, e2) => (
-      NoIdentifiers, NoVariables, Seq(e1, e2), NoTypes, NoFlags,
-      (_, _, es, _, _) => t.Sequence(es(0), es(1))
+    case s.Sequence(es) => (
+      NoIdentifiers, NoVariables, es, NoTypes, NoFlags,
+      (_, _, es1, _, _) => t.Sequence(es1)
     )
 
     case s.NewArray(length, base, init) => (

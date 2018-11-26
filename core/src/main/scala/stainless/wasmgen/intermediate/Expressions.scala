@@ -57,8 +57,9 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     def getType(implicit s: Symbols) = UnitType()
   }
 
-  sealed case class Sequence(e1: Expr, e2: Expr) extends Expr {
-    def getType(implicit s: Symbols) = e2.getType
+  sealed case class Sequence(es: Seq[Expr]) extends Expr {
+    require(es.nonEmpty)
+    def getType(implicit s: Symbols) = es.last.getType
   }
 
   sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {
