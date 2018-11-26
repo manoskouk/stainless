@@ -21,7 +21,7 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.Untyped => Untyped
       case s.UnitType() => Int32Type()
       case s.CharType() => Int32Type()
-      case s.IntegerType() => Int64Type() // FIXME: Implement big integers properly
+      case s.IntegerType() => Int64Type() // TODO: Implement big integers properly
       case s.StringType() => ArrayType(Int32Type())
 
       case s.ADTType(id, tps) =>
@@ -30,7 +30,6 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.FunctionType(from, to) =>
         RecordType(env._2.getFunTypeRecord(
           FunctionType(Seq.fill(from.size)(AnyRefType), AnyRefType)
-          //FunctionType(from map (transform(_, env)), transform(to, env))
         ))
 
       case s.TupleType(bases) =>
@@ -492,11 +491,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
     val sortCodes = new inox.utils.UniqueCounter[Unit]
     locally {
       // We want to reserve the first 5 codes for native types
-      sortCodes.nextGlobal // i32
-      sortCodes.nextGlobal // i64
-      sortCodes.nextGlobal // f32
-      sortCodes.nextGlobal // f64
-      sortCodes.nextGlobal // anyfun
+      for {_ <- 1 to 5} sortCodes.nextGlobal
     }
 
     val eqId = FreshIdentifier(s"eq${sort.id.name}")
@@ -539,7 +534,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
         ),
         Int32Type(),
         { case Seq(v1, v2) =>
-
           ( Equals(RecordSelector(v1, typeTagID), RecordSelector(v2, typeTagID)) +:
             sort.fields.map( f =>
               genEq(
@@ -566,18 +560,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
       ))
     )
   }
-
-  //private def discoverFunSorts(fd: s.Expr)(implicit syms: s.Symbols): Map[s.FunctionType, t.ClosureSort] = {
-  //  s.exprOps.collect( expr =>
-  //    expr.getType match {
-  //      case ft: s.FunctionType => Set(ft ->
-  //        new t.FunPointerSort(FreshIdentifier(ft.asString(s.PrinterOptions())), ft)
-  //      )
-  //      case _ => Set()
-  //    }
-  //  )
-  //  Map()
-  //}
 
   def transform(syms0: s.Symbols): t.Symbols = {
 
@@ -611,9 +593,6 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
       /*equalities ++*/ funs ++ manager.newFunctions
     )
 
-    //println("*** MANAGER ***")
-    //manager.newRecords foreach (r => println(r._2.asString))
-    //println("*** RECORDS ***")
     //ret.records foreach (r => println(r._2.asString))
     //ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
