@@ -392,11 +392,12 @@ private [wasmgen] class ExprTransformer (
       case s.Tuple(exprs) =>
         transform(s.ADT(
           impSyms.lookup[s.ADTSort](s"Tuple${exprs.size}").id,
-          exprs map (_.getType), exprs
+          exprs map (_.getType),
+          exprs
         ), env)
       case s.TupleSelect(tuple, index) =>
         val size = tuple.getType.asInstanceOf[s.TupleType].bases.size
-        val id = impSyms.lookup[s.ADTSort](s"Tuple$size").constructors(index - 1).id
+        val id = impSyms.lookup[s.ADTSort](s"Tuple$size").constructors.head.fields(index - 1).id
         transform(s.ADTSelector(tuple, id), env)
 
       // Sets
