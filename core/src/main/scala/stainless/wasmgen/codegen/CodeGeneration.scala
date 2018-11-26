@@ -29,6 +29,8 @@ trait CodeGeneration {
     def fEnv = FunEnv(s, gh, tab)
   }
 
+  protected def freshLabel(s: String) = FreshIdentifier(s).uniqueName
+
   protected def mkImports(symbols: t.Symbols): Seq[Import] = {
     Seq(Import("sys", "printString", FunSig("printString", Seq(i32), i32)))
   }
@@ -110,7 +112,7 @@ trait CodeGeneration {
 
       case t.IfExpr(cond, thenn, elze) =>
         If(
-          FreshIdentifier("label").uniqueName,
+          freshLabel("label"),
           transform(cond),
           transform(thenn),
           transform(elze)
@@ -205,11 +207,11 @@ trait CodeGeneration {
 
       case t.And(exprs) =>
         exprs map transform reduceRight[Expr] { case (e1, e2) =>
-          If(FreshIdentifier("label").uniqueName, e1, e2, I32Const(0))
+          If(freshLabel("label"), e1, e2, I32Const(0))
         }
       case t.Or(exprs) =>
         exprs map transform reduceRight[Expr] { case (e1, e2) =>
-          If(FreshIdentifier("label").uniqueName, e1, I32Const(1), e2)
+          If(freshLabel("label"), e1, I32Const(1), e2)
         }
       case t.Not(expr) =>
         Binary(xor, typeToZero(i32), transform(expr))

@@ -45,12 +45,11 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.RefinementType(vd, prop) =>
         transform(vd.getType, env)
 
-      case s.TypeParameter(id, flags) =>
+      case s.TypeParameter(id, flags) => // Type erasure
         RecordType(AnyRefSort.id)
 
       // These remain as is
       // case s.RealType() =>  TODO: We will represent Reals as floats (?)
-      // case s.FunctionType(from, to) =>
       // case s.ArrayType(base) =>
       // case s.BVType(signed, size) =>
       //

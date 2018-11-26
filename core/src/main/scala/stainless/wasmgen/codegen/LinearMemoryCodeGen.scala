@@ -17,8 +17,6 @@ import wasm.Definitions._
 object LinearMemoryCodeGen extends CodeGeneration {
   private val memB = "memB"
 
-  private def freshLabel(s: String) = FreshIdentifier(s).uniqueName
-
   override protected def mkImports(s: t.Symbols) = Seq(
     Import("system", "mem", Memory(100))
   ) ++ super.mkImports(s)
