@@ -5,7 +5,7 @@ package codegen
 
 import stainless.Identifier
 import intermediate.{trees => t}
-import wasm.Expressions._
+import wasm.Expressions.{ eq => EQ, _ }
 import wasm.Types._
 import wasm.Definitions._
 
@@ -25,6 +25,62 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkTable(s: t.Symbols) = Table(
     s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
   )
+
+  protected def mkBuiltins(s: t.Symbols): Seq[FunDef] = Seq(mkEquality(s))
+
+  private def mkEquality(s: t.Symbols): FunDef = {
+    implicit val impS = s
+    type BinContext = (Expr, Expr) => (Expr, String)
+    def boxedEq(tpe: Type)(name: String = tpe.toString): BinContext = (lhs, rhs) =>
+      (EQ(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
+
+    def recordEq(rec: t.RecordSort): BinContext = (lhs, rhs) => {
+      // We get offsets of all fields except first (typeTag) which we know is equal already
+      val offsets = rec.flattenFields.scanLeft(0)((off, fld) => off + transform(fld.getType).size).tail
+      val fieldEqs = rec.flattenFields.tail.zip(offsets).map { case (fld, off) =>
+        val wasmTpe = transform(fld.getType)
+        val l = Load(wasmTpe, None, add(lhs, I32Const(off)))
+        val r = Load(wasmTpe, None, add(rhs, I32Const(off)))
+        if(isRefType(fld.getType)) {
+          Call(refEqualityName, i32, Seq(l, r))
+        } else {
+          EQ(l, r)
+        }
+      }
+      (fieldEqs.foldRight(I32Const(1): Expr){ case (e, rest) =>
+        If(freshLabel("label"), e, rest, I32Const(0))
+      }, rec.id.uniqueName)
+    }
+
+    val allEqs: (Expr, Expr) => Seq[(Expr, String)] = (lhs, rhs) => {
+      boxedEq(i32)()(lhs, rhs) +: boxedEq(i64)()(lhs, rhs) +: boxedEq(f32)()(lhs, rhs) +: boxedEq(f64)()(lhs, rhs) +:
+      boxedEq(i32)("function")(lhs, rhs) /* Function reference equality */ +: {
+        val sorts = s.records.values.toSeq.collect{ case c: t.ConstructorSort => c }.sortBy(_.typeTag)
+        //sorts.foreach(s => println(s"${s.id.uniqueName} -> ${s.typeTag}"))
+        assert(sorts.head.typeTag == 5)
+        sorts map (s => recordEq(s)(lhs, rhs))
+      }
+    }
+
+    FunDef("_ref_eq_", Seq(ValDef("lhs", i32), ValDef("rhs", i32)), i32) { implicit lh =>
+      Sequence(Seq(
+        If(
+          freshLabel("label"),
+          EQ(Load(i32, None, GetLocal("lhs")), Load(i32, None, GetLocal("rhs"))),
+          {
+            val eqs = allEqs(GetLocal("lhs"), GetLocal("rhs"))
+            // We use i32 as default, whatever, should not happen
+            val jump = Br_Table(eqs.map(_._2), eqs.head._2, Load(i32, None, GetLocal("lhs")), None)
+            eqs.foldLeft(jump: Expr){ case (first, (eq, label)) =>
+              Sequence(Seq(Block(label, first), Return(eq)))
+            }
+          },
+          Return(I32Const(0))
+        ),
+        I32Const(0)
+      ))
+    }
+  }
 
   protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr = {
     implicit val gh = env.gh
@@ -86,7 +142,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         val initL = lh.getFreshLocal(freshLabel("init"), base)
         Seq(
           SetLocal(initL, elem),
-          Branch(loop, Sequence(Seq(
+          Block(loop, Sequence(Seq(
             Br_If(loop, ge(GetLocal(ind), GetLocal(len))),
             Store(None, indToPtr(GetLocal(ind)), GetLocal(initL)),
             SetLocal(ind, add(GetLocal(ind), I32Const(1)))

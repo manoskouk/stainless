@@ -485,14 +485,13 @@ private [wasmgen] class ExprTransformer (
   * - Implement type representations for composite types based on ADTs/ directly records
   */
 class RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
+  private val sortCodes = new inox.utils.UniqueCounter[Unit]
+  locally {
+    // We want to reserve the first 5 codes for native types
+    for {_ <- 1 to 5} sortCodes.nextGlobal
+  }
 
   def transform(sort: s.ADTSort, env: Env): (t.RecordADTSort, Seq[t.ConstructorSort]) = {
-    val sortCodes = new inox.utils.UniqueCounter[Unit]
-    locally {
-      // We want to reserve the first 5 codes for native types
-      for {_ <- 1 to 5} sortCodes.nextGlobal
-    }
-
     val eqId = FreshIdentifier(s"eq${sort.id.name}")
 
     val parent = new t.RecordADTSort(
@@ -563,7 +562,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
   def transform(syms0: s.Symbols): t.Symbols = {
 
     // (0) Make tuple sorts
-    val syms = syms0.withSorts((2 to 8).map(mkTupleSort))
+    val syms = syms0.withSorts((2 to 2).map(mkTupleSort))
     val manager = new SymbolsManager
     val env0 = (syms, manager)
 

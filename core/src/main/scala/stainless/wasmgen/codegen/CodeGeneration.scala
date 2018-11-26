@@ -32,10 +32,13 @@ trait CodeGeneration {
   protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
 
   protected def mkImports(symbols: t.Symbols): Seq[Import] = {
-    Seq(Import("sys", "printString", FunSig("printString", Seq(i32), i32)))
+    Seq(Import("sys", "printString", FunSig("_printString_", Seq(i32), i32)))
   }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
+  /** Built-in functions. Has to include at least implementation of ref. equality */
+  protected val refEqualityName = "_ref_eq_"
+  protected def mkBuiltins(s: t.Symbols): Seq[FunDef]
 
   protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr
@@ -67,6 +70,13 @@ trait CodeGeneration {
     op(transform(lhs), transform(rhs))
   }
 
+  protected def isRefType(tpe: t.Type): Boolean = tpe match {
+    case t.BVType(_, _) | t.RealType() | t.BooleanType() =>
+      false
+    case t.RecordType(_) | t.ArrayType(_) =>
+      true
+  }
+
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
     case t.BooleanType() => i32
     case t.RealType() => f64
@@ -80,7 +90,7 @@ trait CodeGeneration {
     val imports = mkImports(s)
     val globals = mkGlobals(s)
     val tab = mkTable(s)
-    val funs = s.functions.values.toList map (transform(_)(FunEnv(s, GlobalsHandler(globals), tab)))
+    val funs = mkBuiltins(s) ++ s.functions.values.toList.map(transform(_)(FunEnv(s, GlobalsHandler(globals), tab)))
     Module("program", imports, globals, tab, funs)
   }
 
@@ -111,7 +121,7 @@ trait CodeGeneration {
           transform(body)
         ))
       case t.Output(msg) =>
-        Call("printString", i32, Seq(transform(msg)))
+        Call("_printString_", i32, Seq(transform(msg)))
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
       case t.Sequence(es) =>
@@ -125,7 +135,12 @@ trait CodeGeneration {
           transform(elze)
         )
       case t.Equals(lhs, rhs) =>
-        mkBin(EQ, lhs, rhs)
+        // Equality is value equality for non-reference types,
+        // but we have to invoke the reference equaliry implementation for ref. types
+        if (isRefType(lhs.getType))
+          Call(refEqualityName, i32, Seq(transform(lhs), transform(rhs)))
+        else
+          mkBin(EQ, lhs, rhs)
 
       case bvl@t.BVLiteral(signed, value, size) =>
         if (size <= 32) I32Const(bvl.toBigInt.toInt)

@@ -108,7 +108,7 @@ object Expressions { self =>
     val getType = body.getType
   }
   // A block of instructions with a label at the end
-  case class Branch(label: Label, body: Expr) extends Expr {
+  case class Block(label: Label, body: Expr) extends Expr {
     val getType = body.getType
   }
   // Jump to "label", which MUST be the label of an enclosing structure
@@ -118,6 +118,10 @@ object Expressions { self =>
 
   case class Br_If(label: Label, cond: Expr) extends Expr {
     val getType = void
+  }
+
+  case class Br_Table(labels: Seq[Label], default: Label, index: Expr, body: Option[Expr]) extends Expr {
+    val getType = body.map(_.getType).getOrElse(void)
   }
 
   case class Call(name: Label, tpe: Type, args: Seq[Expr]) extends Expr {
@@ -131,7 +135,7 @@ object Expressions { self =>
   case object Drop extends Expr {
     val getType = void
   }
-  case object Return extends Expr {
+  case class Return(value: Expr) extends Expr {
     val getType = void
   }
   case object Unreachable extends Expr {
@@ -166,7 +170,7 @@ object Expressions { self =>
     val getType = es.map(_.getType).filter(_ != void) match {
       case Seq() => void
       case Seq(tpe) => tpe
-      case other => sys.error("Sequence containing multiple values with non-void types")
+      case other => sys.error(s"Sequence $es contains multiple values with non-void types")
     }
   }
 

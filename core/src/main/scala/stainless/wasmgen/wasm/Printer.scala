@@ -98,9 +98,9 @@ object Printer {
           Indented(doc(body)),
           ")"
         )
-      case Branch(label, body) =>
+      case Block(label, body) =>
         Stacked(
-          s"(branch $$$label ${expr.getType}",
+          s"(block $$$label (result ${expr.getType})",
           Indented(doc(body)),
           ")"
         )
@@ -109,6 +109,13 @@ object Printer {
         Stacked(
           s"(br_if $$$label",
           Indented(doc(cond)),
+          ")"
+        )
+      case Br_Table(labels, default, index, body) =>
+        Stacked(
+          s"(br_table ${(labels:+default) map ("$" + _ ) mkString " "}",
+          Indented(doc(index)),
+          Indented(body map doc getOrElse Raw("")),
           ")"
         )
       case Call(name, _, args) =>
@@ -141,7 +148,12 @@ object Printer {
           Indented(doc(value)),
           ")"
         )
-      case Return => "return"
+      case Return(value) =>
+        Stacked(
+          "(return",
+          Indented(doc(value)),
+          ")"
+        )
       case Unreachable => "unreachable"
       case Drop => "drop"
       case GetLocal(label)  => s"(get_local $$$label)"
