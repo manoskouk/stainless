@@ -563,8 +563,8 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    //ret.records foreach (r => println(r._2.asString))
-    //ret.functions foreach (r => println(r._2.asString))
+    ret.records foreach (r => println(r._2.asString))
+    ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 

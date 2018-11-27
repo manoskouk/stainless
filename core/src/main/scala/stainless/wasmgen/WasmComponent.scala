@@ -6,6 +6,8 @@ package wasmgen
 import inox.Context
 import inox.transformers.SymbolTransformer
 import extraction.StainlessPipeline
+import stainless.utils.CheckFilter
+
 import scala.concurrent.Future
 
 object DebugSectionWasm extends inox.DebugSection("wasm")
@@ -15,6 +17,13 @@ class WasmAnalysis extends AbstractAnalysis {
   type Report = NoReport
 
   def toReport = new NoReport
+}
+
+class WasmFilter(val context: Context) extends CheckFilter {
+  val trees: stainless.trees.type = stainless.trees
+
+  override def shouldBeChecked(fd: trees.FunDef): Boolean =
+    true //fd.flags.exists(_.name == "wasmRuntime") || super.shouldBeChecked(fd)
 }
 
 object WasmComponent extends Component {
@@ -42,6 +51,8 @@ class WasmComponentRun(override val pipeline: StainlessPipeline)
 } with ComponentRun {
 
   def parse(json: io.circe.Json): component.Report = new NoReport
+
+  override def createFilter: WasmFilter = new WasmFilter(this.context)
 
   private[stainless] def apply(functions: Seq[Identifier], symbols: trees.Symbols): Future[WasmAnalysis] = {
     Future.successful {
