@@ -225,7 +225,7 @@ class StainlessCallBack(components: Seq[Component])(override implicit val contex
     try {
       TreeSanitizer(xt).check(funSyms)
     } catch {
-      case e: extraction.MissformedStainlessCode =>
+      case e: extraction.MisformedStainlessCode =>
         reportError(e.tree.getPos, e.getMessage, funSyms)
     }
 
@@ -268,7 +268,7 @@ class StainlessCallBack(components: Seq[Component])(override implicit val contex
       try {
         TreeSanitizer(xt).check(funSyms)
       } catch {
-        case e: extraction.MissformedStainlessCode =>
+        case e: extraction.MisformedStainlessCode =>
           reportError(e.tree.getPos, e.getMessage, funSyms)
       }
 
