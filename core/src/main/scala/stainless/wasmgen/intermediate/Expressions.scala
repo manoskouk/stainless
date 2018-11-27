@@ -6,29 +6,30 @@ import inox.ast.Identifier
 
 trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
+  /** Represents a value of a record type at runtime.
+    * Has to be passed arguments for all fields, including the types ancestors.
+    */
   sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = {
       checkParamTypes(fields, tpe.getRecord.allFields, tpe)
     }
   }
 
+  /** Select a field of a record by name */
   sealed case class RecordSelector(record: Expr, selector: Identifier) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols) = {
       record.getType match {
         case RecordType(id) =>
-          val fl = s.getRecord(id).allFields
-          fl.find(_.id == selector).getOrElse {
-            println(fl)
-            println(this)
-            println(record.getType)
-            sys.error("Whoot")
-          }.tpe
+          s.getRecord(id).allFields
+            .find(_.id == selector)
+            .map(_.tpe).getOrElse(Untyped)
         case _ =>
           Untyped
       }
     }
   }
 
+  /** Represents a function pointer. It is the only runtime value that can have a function type */
   sealed case class FunctionPointer(id: Identifier) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = {
       s.lookupFunction(id)
@@ -37,6 +38,10 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
+  /** Cast an expression to a type lower in the type hierarchy.
+    * If the runtime value does not conform to the cast type,
+    * the program will fail.
+    */
   sealed case class CastDown(e: Expr, subtype: RecordType) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = {
       e.getType match {
@@ -46,6 +51,9 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
+  /** Cast an expression to a type higher in its type hierarchy.
+    * This will never fail at runtime.
+    */
   sealed case class CastUp(e: Expr, supertype: RecordType) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = e.getType match {
       case subtype: RecordType if subtype conformsWith supertype => supertype
@@ -53,10 +61,17 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
+  /** Print a message to the standard output */
   sealed case class Output(msg: Expr) extends Expr {
-    def getType(implicit s: Symbols) = UnitType()
+    def getType(implicit s: Symbols) = {
+      msg.getType match {
+        case ArrayType(Int32Type()) => UnitType()
+        case _ => Untyped
+      }
+    }
   }
 
+  /** Execute all expressions in 'es' one after the other */
   sealed case class Sequence(es: Seq[Expr]) extends Expr {
     require(es.nonEmpty)
     def getType(implicit s: Symbols) = es.last.getType

@@ -209,7 +209,7 @@ trait CodeGeneration {
         mkBin(typeToOp(lhs, ge(_), ge), lhs, rhs)
 
       case t.BVNot(e) =>
-        Binary(xor, typeToZero(transform(e.getType)), transform(e))
+        xor(typeToZero(transform(e.getType)), transform(e))
       case t.BVAnd(lhs, rhs) =>
         mkBin(and, lhs, rhs)
       case t.BVOr(lhs, rhs) =>
@@ -236,7 +236,7 @@ trait CodeGeneration {
           If(freshLabel("label"), e1, I32Const(1), e2)
         }
       case t.Not(expr) =>
-        Binary(sub, I32Const(1), transform(expr))
+        sub(I32Const(1), transform(expr))
     }
   }
 }

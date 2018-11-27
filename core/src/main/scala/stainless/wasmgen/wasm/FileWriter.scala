@@ -2,7 +2,6 @@
 
 package stainless.wasmgen.wasm
 
-import Definitions.FunDef
 import inox.Context
 import java.io.{IOException, File, FileWriter => JFW}
 import scala.sys.process._

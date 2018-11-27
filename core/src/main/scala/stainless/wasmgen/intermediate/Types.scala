@@ -5,6 +5,7 @@ package stainless.wasmgen.intermediate
 import inox.ast.Identifier
 
 trait Types extends inox.ast.Types { self: Trees =>
+  /** A record type identified by the Identifier given as argument */
   sealed case class RecordType(record: Identifier) extends Type {
     def lookupRecord(implicit s: Symbols): Option[RecordSort] = s.lookupRecord(record)
 
@@ -21,6 +22,9 @@ trait Types extends inox.ast.Types { self: Trees =>
     }
   }
 
+  /** The top of the record type hierarchy, corresponding to
+    *  [[trees.AnyRefSort]]
+    */
   val AnyRefType = RecordType(AnyRefSort.id)
 
 }

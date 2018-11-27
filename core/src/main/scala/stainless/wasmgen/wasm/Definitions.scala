@@ -5,6 +5,7 @@ package stainless.wasmgen.wasm
 import Expressions.Expr
 import Types.Type
 
+/** Definitions for wasm programs */
 object Definitions {
 
   case class ValDef(name: Label, tpe: Type)
@@ -16,6 +17,12 @@ object Definitions {
   }
 
   object FunDef {
+    /** Construct a [[FunDef]]
+      *
+      * @param codeGen A function from a [[LocalsHandler]],
+      *                which is instantiated by this constructor with the function arguments,
+      *                to the body of the function
+      */
     def apply(name: String, args: Seq[ValDef], returnType: Type)(codeGen: LocalsHandler => Expr): FunDef = {
       val lh = new LocalsHandler(args)
       // Make code first, as it may increment the locals in lh

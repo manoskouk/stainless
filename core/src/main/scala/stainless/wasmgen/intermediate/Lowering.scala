@@ -485,20 +485,21 @@ private [wasmgen] class ExprTransformer (
 }
 
 
-/** This transformer transforms stainless trees into a variety of
+/** Lowers stainless trees to the language defined in [[stainless.wasmgen.intermediate]]
   *
+  * The following changes take place:
   * - Strings become arrays of chars
   * - Arrays become mutable
-  * - Chars become i8
-  * - Booleans and Unit become i32
+  * - Chars, Booleans and Unit become i32
   * - BigInts become i64 (Currently, will be fixed in the future) (this is done later in the pipeline)
-  * - Reals become floats (this is done later in the pipeline)
   * - Composite types become records. Records are extensible structs in memory. See [[Definitions.RecordSort]]
+  * - Polymorphic types are erased and polymorphic values are boxed.
+  * - Maps, Bags and Sets become records based on a library implemented in stainless (TODO)
   *
-  * TODOs:
-  * - We do not copy for ArrayUpdated, rather we do a destructive update
-  * - Represent BigInts properly
-  * - Implement type representations for composite types based on ADTs/ directly records
+  * Limitations:
+  * - BigInts are approximated by Longs
+  * - Reals are not translated (later are approximated as Doubles)
+  * - ArrayUpdated does not copy, rather it does a destructive update
   */
 class Lowering extends inox.transformers.SymbolTransformer with Transformer {
   private val sortCodes = new inox.utils.UniqueCounter[Unit]

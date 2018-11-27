@@ -18,11 +18,10 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   /** Tags dynamically called functions */
   case object Dynamic extends Flag("dynamic", Seq.empty)
 
-  /** A record type represents a sequence of named fields in memory.
-    * The parent's fields come first, then the fields of the current record.
-    * A record complies to its parent's type.
-    * Implementation is left abstract:
-    *   it can be implemented either in linear memory, or the heap when this is available
+  /** A record sort represents a sequence of named fields.
+    * A record sort may extend another record sort.
+    * A record contains all the parent's fields in order,
+    * followed by its own defined fields.
     */
   class RecordSort(
     val id: Identifier,
@@ -48,23 +47,37 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   private[wasmgen] val funPointerId = FreshIdentifier("fPointer")
   private[wasmgen] val boxedValueId = FreshIdentifier("value")
 
+  /** Represents the top of the record hierarchy. It is the only record sort without a parent.
+    * Defines only one field, which represents the type-tag of the runtime value.
+    */
   object AnyRefSort extends RecordSort(FreshIdentifier("anyref"), None, Seq(typeTag), Seq())
 
   private def prependParamType(tpe: Type, ft: FunctionType) =
     FunctionType(tpe +: ft.from, ft.to)
 
+  /** A record which defines a single field of a function type (function pointer).
+    * It is used as a base of all closures for this function type.
+    */
   sealed class FunPointerSort(id: Identifier, ft: FunctionType)
     extends RecordSort(
       id,
       Some(AnyRefSort.id),
       Seq(ValDef(funPointerId, prependParamType(RecordType(id), ft))))
 
+  /** Represents a closure, containing a function pointer plus the closure's environment
+    */
   sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])
     extends RecordSort(FreshIdentifier("closure"), Some(parent), env)
 
+  /** Represents a record sort corresponding to an ADT of a high-level language.
+    * This sort will never be instantiated at runtime.
+    */
   sealed class RecordADTSort(id: Identifier)
     extends RecordSort(id, Some(AnyRefSort.id), Seq())
 
+  /** Represents a record sort corresponding to an ADT constructor of a high-level language.
+    * Defines a unique type tag which differentiates values of this constructor at runtime.
+    */
   sealed class ConstructorSort(
     id: Identifier,
     parent: Identifier,
@@ -72,6 +85,9 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     fields: Seq[ValDef]
   ) extends RecordSort(id, Some(parent), fields)
 
+  /** Represents a box containing a value of an elementary (or array) type.
+    * Useful to implement boxing for high-level languages with parametric polymorphism.
+    */
   sealed class BoxedSort(tpe: Type)
     extends RecordSort(
       FreshIdentifier("Boxed" + tpe.asString(PrinterOptions())),
