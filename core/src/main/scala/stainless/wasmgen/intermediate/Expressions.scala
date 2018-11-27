@@ -8,7 +8,7 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
   sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = {
-      checkParamTypes(fields, tpe.getRecord.flattenFields, tpe)
+      checkParamTypes(fields, tpe.getRecord.allFields, tpe)
     }
   }
 
@@ -16,7 +16,7 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     protected def computeType(implicit s: Symbols) = {
       record.getType match {
         case RecordType(id) =>
-          val fl = s.getRecord(id).flattenFields
+          val fl = s.getRecord(id).allFields
           fl.find(_.id == selector).getOrElse {
             println(fl)
             println(this)

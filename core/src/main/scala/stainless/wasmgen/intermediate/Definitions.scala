@@ -34,8 +34,8 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     def lookupParent(implicit s: Symbols): Option[RecordSort] = {
       parent.map(s.getRecord)
     }
-    def flattenFields(implicit s: Symbols): Seq[ValDef] = {
-      lookupParent.toSeq.flatMap(_.flattenFields) ++ fields
+    def allFields(implicit s: Symbols): Seq[ValDef] = {
+      lookupParent.toSeq.flatMap(_.allFields) ++ fields
     }
     def ancestors(implicit s: Symbols): Seq[Identifier] = {
       id +: lookupParent.toSeq.flatMap(_.ancestors)

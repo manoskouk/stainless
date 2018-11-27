@@ -500,7 +500,7 @@ private [wasmgen] class ExprTransformer (
   * - Represent BigInts properly
   * - Implement type representations for composite types based on ADTs/ directly records
   */
-class RecordAbstractor extends inox.transformers.SymbolTransformer with Transformer {
+class Lowering extends inox.transformers.SymbolTransformer with Transformer {
   private val sortCodes = new inox.utils.UniqueCounter[Unit]
   locally {
     // We want to reserve the first 6 codes for native types

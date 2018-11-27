@@ -9,7 +9,7 @@ import inox.ast.Identifier
   * The main feature of this language are extensible record types,
   * which are meant to be easily translatable both to the current memory model of wasm (linear memory)
   * and the planned future extension of reference types.
-  * The class [[stainless.wasmgen.intermediate.RecordAbstractor]]
+  * The class [[stainless.wasmgen.intermediate.Lowering]]
   * is responsible for the lowering to this intermediate language.
   *
   * reclang is defined by the following grammars (nonterminals in ' '):

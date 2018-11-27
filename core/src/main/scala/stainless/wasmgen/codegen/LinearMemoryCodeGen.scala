@@ -36,8 +36,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
     def recordEq(rec: t.RecordSort): BinContext = (lhs, rhs) => {
       // We get offsets of all fields except first (typeTag) which we know is equal already
-      val offsets = rec.flattenFields.scanLeft(0)((off, fld) => off + transform(fld.getType).size).tail
-      val fieldEqs = rec.flattenFields.tail.zip(offsets).map { case (fld, off) =>
+      val offsets = rec.allFields.scanLeft(0)((off, fld) => off + transform(fld.getType).size).tail
+      val fieldEqs = rec.allFields.tail.zip(offsets).map { case (fld, off) =>
         val wasmTpe = transform(fld.getType)
         val l = Load(wasmTpe, None, add(lhs, I32Const(off)))
         val r = Load(wasmTpe, None, add(rhs, I32Const(off)))
@@ -104,7 +104,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr = {
     implicit val s = env.s
-    val fields = rt.getRecord.flattenFields
+    val fields = rt.getRecord.allFields
     val tpe = transform(fields.find(_.id == id).get.getType)
     val sizeBefore = fields
       .takeWhile(_.id != id)
