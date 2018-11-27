@@ -80,7 +80,8 @@ import inox.ast.Identifier
   * 0 for boxed Int, 1 for boxed Long,
   * 2 is not used but reserved for boxed Float,
   * 3 for boxed double,
-  * 4 for closure,
+  * 4 for boxed array,
+  * 5 for closure,
   * and then as many tags as are needed for record sorts
   * that are instantiated in the program.
   * In principle that could be any type,

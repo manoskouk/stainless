@@ -103,12 +103,13 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   sealed class BoxedSort(tpe: Type)
     extends RecordSort(FreshIdentifier("Boxed" + tpe.asString(PrinterOptions())), Some(AnyRefSort.id), Seq(ValDef(boxedValueId, tpe)))
 
-  val boxedSorts: Map[Type, BoxedSort] = {
-    Seq(BVType(true, 32), BVType(false, 32), BVType(true, 64), BVType(false, 64), RealType(), BooleanType())
-      .map { tpe => tpe -> new BoxedSort(tpe) }
-      .toMap
+  def typeToTag(tpe: Type): Int = tpe match {
+    case BVType(_, 32) => 0
+    case BooleanType() => 0
+    case BVType(_, 64) => 1
+    case RealType() => 3
+    case ArrayType(_) => 4
+    case FunctionType(_, _) => 5
   }
 
-  val builtinSortsMap: Map[Identifier, RecordSort] =
-    boxedSorts. map { case (_, s) => s.id -> s } + (AnyRefSort.id -> AnyRefSort)
 }

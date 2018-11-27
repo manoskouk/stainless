@@ -54,10 +54,11 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
     val allEqs: (Expr, Expr) => Seq[(Expr, String)] = (lhs, rhs) => {
       boxedEq(i32)()(lhs, rhs) +: boxedEq(i64)()(lhs, rhs) +: boxedEq(f32)()(lhs, rhs) +: boxedEq(f64)()(lhs, rhs) +:
+      boxedEq(i32)("array")(lhs, rhs) /* Array reference equality */ +:
       boxedEq(i32)("function")(lhs, rhs) /* Function reference equality */ +: {
         val sorts = s.records.values.toSeq.collect{ case c: t.ConstructorSort => c }.sortBy(_.typeTag)
         //sorts.foreach(s => println(s"${s.id.uniqueName} -> ${s.typeTag}"))
-        assert(sorts.head.typeTag == 5)
+        assert(sorts.head.typeTag == 6)
         sorts map (s => recordEq(s)(lhs, rhs))
       }
     }
@@ -154,8 +155,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
       case _ => expr // Our translation ensures by construction that we cannot fail when casting closures
     }
-
-
   }
   // Up-casts are trivial
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr = expr
