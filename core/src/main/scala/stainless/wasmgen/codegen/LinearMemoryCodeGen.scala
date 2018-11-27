@@ -5,7 +5,7 @@ package codegen
 
 import stainless.Identifier
 import intermediate.{trees => t}
-import wasm.Expressions.{ eq => EQ, _ }
+import wasm.Expressions.{eq => EQ, _}
 import wasm.Types._
 import wasm.Definitions._
 
@@ -119,8 +119,45 @@ object LinearMemoryCodeGen extends CodeGeneration {
     I32Const(env.tab.indexOf(id.uniqueName))
   }
 
-  // Type casts are trivial
-  protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr = expr
+
+  protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr = {
+    implicit val lh = env.lh
+    implicit val s = env.s
+    val t.RecordType(id) = subType
+    val temp = lh.getFreshLocal(freshLabel("cast"), i32)
+    s.getRecord(id) match {
+      case cs: t.ConstructorSort =>
+        Sequence(Seq(
+          SetLocal(temp, expr),
+          If(
+            freshLabel("label"),
+            EQ(Load(i32, None, GetLocal(temp)), I32Const(cs.typeTag) ),
+            GetLocal(temp),
+            Unreachable
+          )
+        ))
+      case rs: t.RecordSort =>
+        val tags = s.records.collect{ case (_, cs: t.ConstructorSort) if cs.parent contains id  => cs.typeTag }
+        if (tags.isEmpty) I32Const(0)
+        else {
+          Sequence(Seq(
+            SetLocal(temp, expr),
+            If(
+              freshLabel("label"),
+              tags map (t => EQ(Load(i32, None, GetLocal(temp)), I32Const(t))) reduceRight or.apply,
+              GetLocal(temp),
+              Unreachable
+            )
+          ))
+
+        }
+
+      case _ => expr // Our translation ensures by construction that we cannot fail when casting closures
+    }
+
+
+  }
+  // Up-casts are trivial
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr = expr
 
   protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit env: Env): Expr = {
