@@ -510,10 +510,7 @@ class RecordAbstractor extends inox.transformers.SymbolTransformer with Transfor
   def transform(sort: s.ADTSort, env: Env): (t.RecordADTSort, Seq[t.ConstructorSort]) = {
     val eqId = FreshIdentifier(s"eq${sort.id.name}")
 
-    val parent = new t.RecordADTSort(
-      transform(sort.id, env),
-      eqId
-    ).copiedFrom(sort)
+    val parent = new t.RecordADTSort(transform(sort.id, env)).copiedFrom(sort)
 
     val children = sort.constructors map { cons =>
       new t.ConstructorSort(

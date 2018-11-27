@@ -90,8 +90,8 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
   sealed class ClosureSort(parent: Identifier, env: Seq[ValDef])
     extends RecordSort(FreshIdentifier("closure"), Some(parent), env)
 
-  sealed class RecordADTSort(id: Identifier, equality: Identifier)
-    extends RecordSort(id, Some(AnyRefSort.id), Seq(), Seq(HasADTEquality(equality))) // TODO: Fix type
+  sealed class RecordADTSort(id: Identifier)
+    extends RecordSort(id, Some(AnyRefSort.id), Seq()) // TODO: Fix type
 
   sealed class ConstructorSort(
     id: Identifier,
