@@ -6,7 +6,7 @@ package wasmgen
 import inox.Context
 import inox.transformers.SymbolTransformer
 import extraction.StainlessPipeline
-import stainless.utils.CheckFilter
+import utils.CheckFilter
 
 import scala.concurrent.Future
 
@@ -23,7 +23,8 @@ class WasmFilter(val context: Context) extends CheckFilter {
   val trees: stainless.trees.type = stainless.trees
 
   override def shouldBeChecked(fd: trees.FunDef): Boolean = {
-    fd.flags.exists(_.name == "wasmRuntime") || super.shouldBeChecked(fd)
+    println(fd.id.name)
+    true //fd.id.name == "setAdd" || super.shouldBeChecked(fd) // TODO
   }
 }
 
