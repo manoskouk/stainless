@@ -90,12 +90,12 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
-  /** Copies elements from array 'from' to array 'to',
-    * starting with the element at index 'start' and ending with the element at index 'end'-1
+  /** Copies 'length' elements from array 'from' to array 'to',
+    * starting with the elements at indexes 'startFrom' and startTo'
     */
-  sealed case class ArrayCopy(from: Expr, to: Expr, start: Expr, end: Expr) extends Expr {
-    def getType(implicit s: Symbols) = (from.getType, to.getType, start.getType, end.getType) match {
-      case (ArrayType(base1), ArrayType(base2), Int32Type(), Int32Type()) if base1 == base2 => UnitType()
+  sealed case class ArrayCopy(from: Expr, to: Expr, startFrom: Expr, startTo: Expr, length: Expr) extends Expr {
+    def getType(implicit s: Symbols) = (from.getType, to.getType, startFrom.getType, startTo.getType, length.getType) match {
+      case (ArrayType(base1), ArrayType(base2), Int32Type(), Int32Type(), Int32Type()) if base1 == base2 => UnitType()
       case _ => Untyped
     }
   }

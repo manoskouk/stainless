@@ -141,6 +141,9 @@ object Expressions { self =>
   case object Unreachable extends Expr {
     val getType = void
   }
+  case object Nop extends Expr {
+    val getType = void
+  }
 
   case class Load(tpe: Type, truncate: Option[(Type,Sign)], address: Expr) extends Expr {
     val getType = truncate.map(_._1).getOrElse(tpe)

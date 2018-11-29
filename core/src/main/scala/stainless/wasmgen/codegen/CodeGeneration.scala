@@ -36,12 +36,17 @@ trait CodeGeneration {
   }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
-  /** Built-in functions. Has to include at least implementation of ref. equality/inequality */
+  /** Built-in functions */
   protected val refEqualityName = "_ref_eq_"
   protected val refInequalityName = "_ref_ineq_"
+  protected def arrayCopyName(tpe: Type) = s"_array_copy_${tpe}_"
   protected def mkEquality(s: t.Symbols): FunDef
   protected def mkInequality(s: t.Symbols): FunDef
-  protected def mkBuiltins(s: t.Symbols): Seq[FunDef] = Seq(mkEquality(s), mkInequality(s))
+  protected def mkArrayCopy(s: t.Symbols, tpe: Type): FunDef
+  protected def mkBuiltins(s: t.Symbols): Seq[FunDef] = {
+    Seq(mkEquality(s), mkInequality(s)) ++
+    Seq(i32, i64, f32, f64).map(mkArrayCopy(s, _))
+  }
 
   protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr
@@ -52,7 +57,6 @@ trait CodeGeneration {
   protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
-  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, end: Expr)(implicit env: Env): Expr
 
   final protected def typeToSign(tpe: t.Typed)(implicit s: t.Symbols): Sign = {
     tpe.getType match {
@@ -185,10 +189,10 @@ trait CodeGeneration {
         mkArraySet(transform(array), transform(index), transform(value))
       case t.ArrayLength(array) =>
         mkArrayLength(transform(array))
-      case t.ArrayCopy(from, to, start, end) =>
-        mkArrayCopy(transform(from.getType.asInstanceOf[t.ArrayType].base),
-          transform(from), transform(to), transform(start), transform(end)
-        )
+      case t.ArrayCopy(from, to, startFrom, startTo, length) =>
+        val t.ArrayType(tpe) = from.getType
+        val trTpe = transform(tpe)
+        Call(s"_array_copy_${trTpe}_", trTpe, Seq(from, to, startFrom, startTo, length) map transform)
 
       case t.Plus(lhs, rhs) =>
         mkBin(add, lhs, rhs)

@@ -156,6 +156,7 @@ object Printer {
         )
       case Unreachable => "unreachable"
       case Drop => "drop"
+      case Nop => "nop"
       case GetLocal(label)  => s"(get_local $$$label)"
       case SetLocal(label, value) =>
         Stacked(

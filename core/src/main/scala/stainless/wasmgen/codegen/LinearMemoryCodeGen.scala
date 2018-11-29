@@ -62,7 +62,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       }
     }
 
-    FunDef("_ref_eq_", Seq(ValDef("lhs", i32), ValDef("rhs", i32)), i32) { implicit lh =>
+    FunDef(refEqualityName, Seq(ValDef("lhs", i32), ValDef("rhs", i32)), i32) { implicit lh =>
       Sequence(Seq(
         If(
           freshLabel("label"),
@@ -120,7 +120,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       }
     }
 
-    FunDef("_ref_ineq_", Seq(ValDef("lhs", i32), ValDef("rhs", i32)), i32) { implicit lh =>
+    FunDef(refInequalityName, Seq(ValDef("lhs", i32), ValDef("rhs", i32)), i32) { implicit lh =>
       val temp = lh.getFreshLocal("temp", i32)
       Sequence(Seq(
         SetLocal(temp, sub(Load(i32, None, GetLocal("lhs")), Load(i32, None, GetLocal("rhs")))),
@@ -139,6 +139,58 @@ object LinearMemoryCodeGen extends CodeGeneration {
         ),
         I32Const(0) // Should never happen
       ))
+    }
+  }
+/*protected def mkArrayCopy((base: Type, from: Expr, to: Expr, startFrom: Expr, startTo: Expr, length: Expr)(implicit env: Env): Expr = {
+
+    implicit val lh = env.lh
+    implicit val gh = env.gh
+    val f = lh.getFreshLocal(freshLabel("from"), i32)
+    val t = lh.getFreshLocal(freshLabel("to"), i32)
+    val iFrom = lh.getFreshLocal(freshLabel("indexFrom"), i32)
+    val iTo = lh.getFreshLocal(freshLabel("indexTo"), i32)
+    val l = lh.getFreshLocal(freshLabel("length"), i32)
+    val cnt = lh.getFreshLocal(freshLabel("counter"), i32)
+    val loop = freshLabel("loop")
+    def indToPtr(arr: String, e: Expr) = add(GetLocal(arr), add(I32Const(4), mul(I32Const(base.size), e)))
+    Sequence( Seq(
+      SetLocal(f, from),
+      SetLocal(t, to),
+      SetLocal(iFrom, startFrom),
+      SetLocal(iTo, startTo)
+    ))
+  }*/
+  protected def mkArrayCopy(s: t.Symbols, tpe: Type): FunDef = {
+    FunDef(
+      arrayCopyName(tpe),
+      Seq("from", "to", "startFrom", "startTo", "length").map(ValDef(_, i32)),
+      i32
+    ) { implicit lh =>
+      val index = lh.getFreshLocal(freshLabel("index"), i32)
+      val loop = freshLabel("loop")
+      @inline def getElemAddr(arr: String, start: String) = {
+        // arr + (1 + startIndex + index) * size
+        add(
+          GetLocal(arr),
+          mul(
+            add(I32Const(1), add(GetLocal(start), GetLocal(index))),
+            I32Const(tpe.size)))
+      }
+      Sequence(Seq(
+        SetLocal(index, I32Const(0)),
+        Loop(loop,
+          If(
+            freshLabel("label"),
+            lt(GetLocal(index), GetLocal("length")),
+            Sequence(Seq(
+              Store(None, getElemAddr("to", "startTo"), Load(tpe, None, getElemAddr("from", "startFrom"))),
+              Br(loop)
+            )),
+            Nop
+          )
+        )
+      ))
+      I32Const(0) // Unit literal
     }
   }
 
@@ -267,33 +319,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
 
-  protected def mkArrayCopy(base: Type, from: Expr, to: Expr, start: Expr, finish: Expr)(implicit env: Env): Expr = { ??? /*
-    implicit val lh = env.lh
-    implicit val gh = env.gh
-    val f = lh.getFreshLocal(freshLabel("from"), i32)
-    val t = lh.getFreshLocal(freshLabel("to"), i32)
-    val ind  = lh.getFreshLocal(freshLabel("index"),  i32)
-    val loop = freshLabel("loop")
-    def indToPtr(arr: Label, e: Expr) = add(GetLocal(arr), add(I32Const(4), mul(I32Const(base.size), e)))
-    Sequence( Seq(
-      SetLocal(len, length),
-      Store(i32, None, GetGlobal(memB), GetLocal(len)),
-      SetLocal(ind, I32Const(0))
-    ) ++ (init match {
-      case Some(elem) =>
-        val initL = lh.getFreshLocal(freshLabel("init"), base)
-        Seq(
-          SetLocal(initL, elem),
-          Branch(loop, void, Sequence(Seq(
-            Br_If(loop, ge(GetLocal(ind), GetLocal(len))),
-            Store(base, None, indToPtr(GetLocal(ind)), GetLocal(initL)),
-            SetLocal(ind, add(GetLocal(ind), I32Const(1)))
-          )))
-        )
-      case None =>
-        Seq()
-    }*/
-  }
+
+
 
   override def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
     case t.ArrayType(_) => i32

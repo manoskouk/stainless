@@ -389,8 +389,8 @@ private [wasmgen] class ExprTransformer (
               newArray.toVal,
               NewArray(Plus(ArrayLength(l), ArrayLength(r)), Int32Type(), None),
               Sequence(Seq(
-                ArrayCopy(l, newArray, Int32Literal(0), ArrayLength(l)),
-                ArrayCopy(r, newArray, ArrayLength(l), Plus(ArrayLength(l), ArrayLength(r))),
+                ArrayCopy(l, newArray, Int32Literal(0), Int32Literal(0), ArrayLength(l)),
+                ArrayCopy(r, newArray, Int32Literal(0), ArrayLength(l), ArrayLength(r)),
                 newArray
               ))
             )))
@@ -403,7 +403,8 @@ private [wasmgen] class ExprTransformer (
               transform(expr, env),
               NewArray(Minus(endV, startV), Int32Type(), None),
               startV,
-              endV ) ))
+              Int32Literal(0),
+              Minus(endV, startV) ) ))
 
       case s.StringLength(expr) =>
         ArrayLength(transform(expr, env))
