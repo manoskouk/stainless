@@ -172,13 +172,13 @@ object Printer {
         )
       case Extend(to, sign, e) =>
         Stacked(
-          s"($to.extend_$sign/${expr.getType}",
+          s"($to.extend_$sign/${e.getType}",
           Indented(doc(e)),
           ")"
         )
       case Wrap(to, e) =>
         Stacked(
-          s"($to.wrap/${expr.getType}",
+          s"($to.wrap/${e.getType}",
           Indented(doc(e)),
           ")"
         )
