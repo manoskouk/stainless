@@ -141,25 +141,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       ))
     }
   }
-/*protected def mkArrayCopy((base: Type, from: Expr, to: Expr, startFrom: Expr, startTo: Expr, length: Expr)(implicit env: Env): Expr = {
 
-    implicit val lh = env.lh
-    implicit val gh = env.gh
-    val f = lh.getFreshLocal(freshLabel("from"), i32)
-    val t = lh.getFreshLocal(freshLabel("to"), i32)
-    val iFrom = lh.getFreshLocal(freshLabel("indexFrom"), i32)
-    val iTo = lh.getFreshLocal(freshLabel("indexTo"), i32)
-    val l = lh.getFreshLocal(freshLabel("length"), i32)
-    val cnt = lh.getFreshLocal(freshLabel("counter"), i32)
-    val loop = freshLabel("loop")
-    def indToPtr(arr: String, e: Expr) = add(GetLocal(arr), add(I32Const(4), mul(I32Const(base.size), e)))
-    Sequence( Seq(
-      SetLocal(f, from),
-      SetLocal(t, to),
-      SetLocal(iFrom, startFrom),
-      SetLocal(iTo, startTo)
-    ))
-  }*/
   protected def mkArrayCopy(s: t.Symbols, tpe: Type): FunDef = {
     FunDef(
       arrayCopyName(tpe),
