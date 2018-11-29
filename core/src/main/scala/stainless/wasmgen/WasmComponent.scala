@@ -22,8 +22,9 @@ class WasmAnalysis extends AbstractAnalysis {
 class WasmFilter(val context: Context) extends CheckFilter {
   val trees: stainless.trees.type = stainless.trees
 
-  override def shouldBeChecked(fd: trees.FunDef): Boolean =
-    true //fd.flags.exists(_.name == "wasmRuntime") || super.shouldBeChecked(fd)
+  override def shouldBeChecked(fd: trees.FunDef): Boolean = {
+    fd.flags.exists(_.name == "wasmRuntime") || super.shouldBeChecked(fd)
+  }
 }
 
 object WasmComponent extends Component {
