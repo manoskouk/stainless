@@ -51,11 +51,13 @@ import inox.ast.Identifier
   *         | Array.copy('e', 'e', 'e', 'e') // from, to, start, finish
   *
   *         | 'e' 'binop' 'e'
+  *         | ! 'e'
   *
   *   'binop' ::= + | - | * | / | mod | remainder
   *             | < | > | <= | >= | & | "|"
   *             | ^ | << | >> | >>>
   *             | (bitvector casts)
+  *             | "||" | &&
   *
   *
   * The notable typing rules are for records:
@@ -77,10 +79,11 @@ import inox.ast.Identifier
   * The typetag field (which is defined in anyref,
   * therefore present in every record) defines the type of a record value
   * at runtime as follows:
-  * 0 for boxed Int, 1 for boxed Long,
-  * 2 is not used but reserved for boxed Float,
-  * 3 for boxed double,
-  * 4 for boxed array,
+  * 0 for boxed Int,
+  * 1 for boxed Long,
+  * 2 is not used but is reserved for boxed Float,
+  * 3 for boxed Double,
+  * 4 for boxed Array,
   * 5 for closure,
   * and then as many tags as are needed for record sorts
   * that are instantiated in the program.
