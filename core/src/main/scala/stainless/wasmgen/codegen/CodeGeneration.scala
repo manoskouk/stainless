@@ -36,9 +36,12 @@ trait CodeGeneration {
   }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
-  /** Built-in functions. Has to include at least implementation of ref. equality */
+  /** Built-in functions. Has to include at least implementation of ref. equality/inequality */
   protected val refEqualityName = "_ref_eq_"
-  protected def mkBuiltins(s: t.Symbols): Seq[FunDef]
+  protected val refInequalityName = "_ref_ineq_"
+  protected def mkEquality(s: t.Symbols): FunDef
+  protected def mkInequality(s: t.Symbols): FunDef
+  protected def mkBuiltins(s: t.Symbols): Seq[FunDef] = Seq(mkEquality(s), mkInequality(s))
 
   protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr
@@ -122,6 +125,12 @@ trait CodeGeneration {
         ))
       case t.Output(msg) =>
         Call("_printString_", i32, Seq(transform(msg)))
+      case fi@t.FunctionInvocation(id, tps, Seq(lhs, rhs)) if id.name == "_compare_" =>
+        // This is hard-coded inequality and not a normal function.
+        if (isRefType(lhs.getType))
+          Call(refInequalityName, i32, Seq(transform(lhs), transform(rhs)))
+        else
+          mkBin(sub, lhs, rhs)
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
       case t.Sequence(es) =>
@@ -190,9 +199,9 @@ trait CodeGeneration {
       case t.Division(lhs, rhs) =>
         mkBin(typeToOp(lhs, div(_), div), lhs, rhs)
       case t.Remainder(lhs, rhs) =>
-        mkBin(rem(typeToSign(lhs)), lhs, rhs) // FIXME
+        mkBin(rem(typeToSign(lhs)), lhs, rhs)
       case t.Modulo(lhs, rhs) =>
-        mkBin(rem(typeToSign(lhs)), lhs, rhs) // FIXME
+        mkBin(rem(Unsigned), lhs, rhs)
       case t.UMinus(e) =>
         e.getType match {
           case t.RealType() => Unary(neg, transform(e))

@@ -5,6 +5,7 @@ package codegen
 
 import stainless.Identifier
 import intermediate.{trees => t}
+import wasm.LocalsHandler
 import wasm.Expressions.{eq => EQ, _}
 import wasm.Types._
 import wasm.Definitions._
@@ -26,9 +27,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
   )
 
-  protected def mkBuiltins(s: t.Symbols): Seq[FunDef] = Seq(mkEquality(s))
-
-  private def mkEquality(s: t.Symbols): FunDef = {
+  protected def mkEquality(s: t.Symbols): FunDef = {
     implicit val impS = s
     type BinContext = (Expr, Expr) => (Expr, String)
     def boxedEq(tpe: Type)(name: String = tpe.toString): BinContext = (lhs, rhs) =>
@@ -79,6 +78,66 @@ object LinearMemoryCodeGen extends CodeGeneration {
           Return(I32Const(0))
         ),
         I32Const(0)
+      ))
+    }
+  }
+
+  protected def mkInequality(s: t.Symbols): FunDef = {
+    implicit val impS = s
+    type BinContext = (Expr, Expr) => (Expr, String)
+    def boxedIneq(tpe: Type)(name: String = tpe.toString): BinContext = (lhs, rhs) =>
+      (sub(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
+
+    def recordIneq(rec: t.RecordSort, lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): (Expr, String) = {
+      // We get offsets of all fields except first (typeTag) which we know is equal already
+      val offsets = rec.allFields.scanLeft(0)((off, fld) => off + transform(fld.getType).size).tail
+      val fieldIneqs = rec.allFields.tail.zip(offsets).map { case (fld, off) =>
+        val wasmTpe = transform(fld.getType)
+        val l = Load(wasmTpe, None, add(lhs, I32Const(off)))
+        val r = Load(wasmTpe, None, add(rhs, I32Const(off)))
+        if(isRefType(fld.getType)) {
+          Call(refEqualityName, i32, Seq(l, r))
+        } else {
+          sub(l, r)
+        }
+      }
+      (fieldIneqs.foldRight(I32Const(0): Expr){ case (e, rest) =>
+        Sequence(Seq(
+          SetLocal(temp, e),
+          If(freshLabel("label"), eqz(GetLocal(temp)), rest, GetLocal(temp))
+        ))
+      }, rec.id.uniqueName)
+    }
+
+    def allIneqs(lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): Seq[(Expr, String)] = {
+      boxedIneq(i32)()(lhs, rhs) +: boxedIneq(i64)()(lhs, rhs) +: boxedIneq(f32)()(lhs, rhs) +: boxedIneq(f64)()(lhs, rhs) +:
+        boxedIneq(i32)("array")(lhs, rhs) /* Array reference equality */ +:
+        boxedIneq(i32)("function")(lhs, rhs) /* Function reference equality */ +: {
+        val sorts = s.records.values.toSeq.collect{ case c: t.ConstructorSort => c }.sortBy(_.typeTag)
+        //sorts.foreach(s => println(s"${s.id.uniqueName} -> ${s.typeTag}"))
+        assert(sorts.head.typeTag == 6)
+        sorts map (s => recordIneq(s, lhs, rhs, temp))
+      }
+    }
+
+    FunDef("_ref_ineq_", Seq(ValDef("lhs", i32), ValDef("rhs", i32)), i32) { implicit lh =>
+      val temp = lh.getFreshLocal("temp", i32)
+      Sequence(Seq(
+        SetLocal(temp, sub(Load(i32, None, GetLocal("lhs")), Load(i32, None, GetLocal("rhs")))),
+        If(
+          freshLabel("label"),
+          eqz(GetLocal(temp)),
+          {
+            val ineqs = allIneqs(GetLocal("lhs"), GetLocal("rhs"), temp)
+            // We use i32 as default, whatever, should not happen
+            val jump = Br_Table(ineqs.map(_._2), ineqs.head._2, Load(i32, None, GetLocal("lhs")), None)
+            ineqs.foldLeft(jump: Expr){ case (first, (ineq, label)) =>
+              Sequence(Seq(Block(label, first), Return(ineq)))
+            }
+          },
+          Return(GetLocal(temp))
+        ),
+        I32Const(0) // Should never happen
       ))
     }
   }
