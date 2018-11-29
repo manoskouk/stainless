@@ -23,8 +23,7 @@ class WasmFilter(val context: Context) extends CheckFilter {
   val trees: stainless.trees.type = stainless.trees
 
   override def shouldBeChecked(fd: trees.FunDef): Boolean = {
-    println(fd.id.name)
-    true //fd.id.name == "setAdd" || super.shouldBeChecked(fd) // TODO
+    fd.params.isEmpty && super.shouldBeChecked(fd)
   }
 }
 
@@ -56,10 +55,10 @@ class WasmComponentRun(override val pipeline: StainlessPipeline)
 
   override def createFilter: WasmFilter = new WasmFilter(this.context)
 
-  private[stainless] def apply(functions: Seq[Identifier], symbols: trees.Symbols): Future[WasmAnalysis] = {
+  protected def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[WasmAnalysis] = {
     Future.successful {
-      val fw = new wasm.FileWriter(codegen.LinearMemoryCodeGen.transform((new intermediate.Lowering).transform(symbols)))
-      fw.writeFiles(context)
+      val module = codegen.LinearMemoryCodeGen.transform((new intermediate.Lowering).transform(symbols))
+      new wasm.FileWriter(context, module, functions.map(_.uniqueName).toSet).writeFiles()
       new WasmAnalysis
     }
   }

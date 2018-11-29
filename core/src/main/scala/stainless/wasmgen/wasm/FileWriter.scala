@@ -2,11 +2,11 @@
 
 package stainless.wasmgen.wasm
 
-import inox.Context
 import java.io.{IOException, File, FileWriter => JFW}
 import scala.sys.process._
+import inox.Context
 
-class FileWriter(module: Module) {
+class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
   object Env {
     trait OS
     object Linux extends OS
@@ -25,14 +25,13 @@ class FileWriter(module: Module) {
     }
   }
 
-
   def writeWasmText(fileName: String): Unit = {
     val fw = new JFW(new File(fileName))
     fw.write(Printer(module))
     fw.flush()
   }
 
-  def writeNodejsWrapper(fileName: String, moduleFile: String /*, toRun: Set[FunDef]*/): Unit = {
+  def writeNodejsWrapper(fileName: String, moduleFile: String): Unit = {
     val wrapperString =
       s"""|// `Wasm` does **not** understand node buffers, but thankfully a node buffer
           |// is easy to convert to a native Uint8Array.
@@ -81,7 +80,7 @@ class FileWriter(module: Module) {
           |
           |loadWebAssembly('$moduleFile', importObject).then(function(instance) {
           |""".stripMargin ++
-          module.functions.filter(f => /*toRun(f) &&*/ f.args.isEmpty).map { f =>
+          module.functions.filter(f => toExecute(f.name)).map { f =>
         s"|  console.log(instance.exports.${f.name}());\n".stripMargin // FIXME: Add printing for all types to the wasm side
           }.mkString ++
        """|}).catch( function(error) {
@@ -94,7 +93,7 @@ class FileWriter(module: Module) {
     fw.flush()
   }
 
-  def writeFiles(ctx: Context) = {
+  def writeFiles() = {
     val outDirName = "wasmout"
 
     def withExt(ext: String) = s"$outDirName/${module.name}.$ext"
@@ -126,13 +125,12 @@ class FileWriter(module: Module) {
       }
     } catch {
       case _: IOException =>
-        ctx.reporter.fatalError(
+        context.reporter.fatalError(
           "wat2wasm utility was not found under expected directory or in system path, " +
           "or did not have permission to execute"
         )
       case e: RuntimeException =>
-        println(e.getMessage)
-        ctx.reporter.fatalError(
+        context.reporter.fatalError(
           s"wat2wasm failed to translate WebAssembly text file ${withExt("wat")} to binary"
         )
     }
