@@ -33,7 +33,7 @@ trait Transformer extends stainless.transformers.Transformer {
         ))
 
       case s.TupleType(bases) =>
-        RecordType(env._1.lookup[s.ADTSort](s"Tuple${bases.size}").id)
+        RecordType(env._1.lookup[s.ADTSort](s"_Tuple${bases.size}_").id)
       case s.SetType(base) => ???
       case s.BagType(base) => ???
       case s.MapType(from, to) => ???
@@ -412,13 +412,13 @@ private [wasmgen] class ExprTransformer (
       // Tuples
       case s.Tuple(exprs) =>
         transform(s.ADT(
-          impSyms.lookup[s.ADTSort](s"Tuple${exprs.size}").constructors.head.id,
+          impSyms.lookup[s.ADTSort](s"_Tuple${exprs.size}_").constructors.head.id,
           exprs map (_.getType),
           exprs
         ), env)
       case s.TupleSelect(tuple, index) =>
         val size = tuple.getType.asInstanceOf[s.TupleType].bases.size
-        val constr = impSyms.lookup[s.ADTSort](s"Tuple$size").constructors.head
+        val constr = impSyms.lookup[s.ADTSort](s"_Tuple${size}_").constructors.head
         val selector = constr.fields(index - 1).id
         maybeUnbox(
           t.RecordSelector(t.CastDown(transform(tuple, env), RecordType(constr.id)), selector),
@@ -526,24 +526,24 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
     (parent, children)
   }
 
-  private def mkTupleSort(size: Int): s.ADTSort = {
-    require(size >= 2)
-    val dsl = new inox.ast.DSL { val trees: s.type = s }
-    val sortName = SymbolIdentifier(s"Tuple$size")
-    val constrName = FreshIdentifier(s"Tuple${size}C")
-    dsl.mkSort(sortName)( (1 to size).map(ind => s"T$ind") : _* )( tps =>
-      Seq((constrName,
-        tps.zipWithIndex.map { case (tpe, ind) =>
-          s.ValDef(FreshIdentifier(s"_${ind+1}"), tpe)
-        }
-      ))
-    )
-  }
+  //private def mkTupleSort(size: Int): s.ADTSort = {
+  //  require(size >= 2)
+  //  val dsl = new inox.ast.DSL { val trees: s.type = s }
+  //  val sortName = SymbolIdentifier(s"Tuple$size")
+  //  val constrName = FreshIdentifier(s"Tuple${size}C")
+  //  dsl.mkSort(sortName)( (1 to size).map(ind => s"T$ind") : _* )( tps =>
+  //    Seq((constrName,
+  //      tps.zipWithIndex.map { case (tpe, ind) =>
+  //        s.ValDef(FreshIdentifier(s"_${ind+1}"), tpe)
+  //      }
+  //    ))
+  //  )
+  //}
 
   def transform(syms0: s.Symbols): t.Symbols = {
 
     // (0) Make tuple sorts
-    val syms = syms0.withSorts((2 to 4).map(mkTupleSort))
+    val syms = syms0//.withSorts((2 to 4).map(mkTupleSort))
     val manager = new SymbolsManager
     val env0 = (syms, manager)
 

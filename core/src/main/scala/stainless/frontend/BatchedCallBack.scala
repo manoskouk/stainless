@@ -20,8 +20,10 @@ class BatchedCallBack(components: Seq[Component])(implicit val context: inox.Con
   def beginExtractions(): Unit = {}
 
   def apply(file: String, unit: xt.UnitDef, classes: Seq[xt.ClassDef], functions: Seq[xt.FunDef]): Unit = {
-    currentFunctions ++= functions
-    currentClasses ++= classes
+    synchronized {
+      currentFunctions ++= functions
+      currentClasses ++= classes
+    }
   }
 
   def failed(): Unit = {}
@@ -29,7 +31,7 @@ class BatchedCallBack(components: Seq[Component])(implicit val context: inox.Con
   def endExtractions(): Unit = {
     val symbols = xt.NoSymbols.withClasses(currentClasses).withFunctions(currentFunctions)
     val reports = runs.map { run =>
-      RunReport(run)(Await.result(run(symbols.functions.keys.toSeq, symbols), Duration.Inf).toReport)
+      RunReport(run)(Await.result(run(symbols.functions.keys.toSeq, symbols, filterSymbols = true), Duration.Inf).toReport)
     }
     report = Report(reports)
   }

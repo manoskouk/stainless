@@ -6,7 +6,7 @@ package frontend
 import scala.language.existentials
 
 import extraction.xlang.{ TreeSanitizer, trees => xt }
-import utils.{ CheckFilter, DependenciesFinder, JsonUtils, Registry }
+import utils.{ CheckFilter, XLangDependenciesFinder, JsonUtils, Registry }
 
 import scala.collection.mutable.{ ListBuffer, Set => MutableSet }
 
@@ -125,8 +125,8 @@ class StainlessCallBack(components: Seq[Component])(override implicit val contex
   private val registry = new Registry {
     override val context = self.context
 
-    override def computeDirectDependencies(fd: xt.FunDef): Set[Identifier] = new DependenciesFinder()(fd)
-    override def computeDirectDependencies(cd: xt.ClassDef): Set[Identifier] = new DependenciesFinder()(cd)
+    override def computeDirectDependencies(fd: xt.FunDef): Set[Identifier] = new XLangDependenciesFinder()(fd)
+    override def computeDirectDependencies(cd: xt.ClassDef): Set[Identifier] = new XLangDependenciesFinder()(cd)
 
     override def shouldBeChecked(fd: xt.FunDef): Boolean = self.shouldBeChecked(fd)
   }

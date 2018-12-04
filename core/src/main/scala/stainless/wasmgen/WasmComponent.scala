@@ -6,7 +6,7 @@ package wasmgen
 import inox.Context
 import inox.transformers.SymbolTransformer
 import extraction.StainlessPipeline
-import utils.CheckFilter
+import utils.{CheckFilter, DependenciesFinder}
 
 import scala.concurrent.Future
 
@@ -46,14 +46,16 @@ object WasmComponent extends Component {
 }
 
 class WasmComponentRun(override val pipeline: StainlessPipeline)
-                      (override implicit val context: inox.Context) extends {
+                      (override implicit val context: Context) extends {
   override val component = WasmComponent
   override val trees: stainless.trees.type = stainless.trees
 } with ComponentRun {
 
-  def parse(json: io.circe.Json): component.Report = new NoReport
+  def parse(json: io.circe.Json): NoReport = new NoReport
 
   override def createFilter: WasmFilter = new WasmFilter(this.context)
+
+  override lazy val dependenciesFinder: DependenciesFinder { val t: stainless.trees.type } = new WasmDependenciesFinder
 
   protected def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[WasmAnalysis] = {
     Future.successful {

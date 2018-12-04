@@ -2,12 +2,12 @@
 
 package stainless
 
-import utils.CheckFilter
-
+import utils.{CheckFilter, DefinitionIdFinder, DependenciesFinder}
+import extraction.xlang.{trees => xt}
 import io.circe._
+import stainless.ast.Trees
 
 import scala.concurrent.Future
-
 import scala.language.existentials
 
 trait Component { self =>
@@ -71,16 +71,29 @@ trait ComponentRun { self =>
   private[this] final val extractionFilter = createFilter
 
   /** Sends the symbols through the extraction pipeline. */
-  def extract(symbols: extraction.xlang.trees.Symbols): trees.Symbols = extractionPipeline extract symbols
+  def extract(symbols: xt.Symbols): trees.Symbols = extractionPipeline extract symbols
 
   /** Sends the program's symbols through the extraction pipeline. */
-  def extract(program: inox.Program { val trees: extraction.xlang.trees.type }): inox.Program {
+  def extract(program: inox.Program { val trees: xt.type }): inox.Program {
     val trees: self.trees.type
   } = inox.Program(trees)(extract(program.symbols))
 
+  /** Override this if you need another kind of filtering */
+  protected lazy val dependenciesFinder = new DependenciesFinder {
+    val t: self.trees.type = self.trees
+    protected def traverser(symbols: t.Symbols) = new DefinitionIdFinder {
+      val trees: t.type = t
+      val s: t.Symbols = symbols
+    }
+  }
+
+  private def filter(ids: Seq[Identifier], symbols: trees.Symbols): trees.Symbols = {
+    dependenciesFinder.findDependencies(ids.toSet, symbols)
+  }
+
   /** Passes the provided symbols through the extraction pipeline and processes all
     * functions derived from the provided identifier. */
-  def apply(ids: Seq[Identifier], symbols: extraction.xlang.trees.Symbols): Future[Analysis] = try {
+  def apply(ids: Seq[Identifier], symbols: xt.Symbols, filterSymbols: Boolean = false): Future[Analysis] = try {
 
     val exSymbols = extract(symbols)
 
@@ -92,6 +105,7 @@ trait ComponentRun { self =>
     } (ids.flatMap(id => exSymbols.lookupFunction(id).toSeq).filter(extractionFilter.shouldBeChecked).map(_.id).toSet)
 
     val toProcess = toCheck.toSeq.sortBy(exSymbols.getFunction(_).getPos)
+    println(toProcess)
 
     for (id <- toProcess) {
       val fd = exSymbols.getFunction(id)
@@ -101,13 +115,16 @@ trait ComponentRun { self =>
       }
     }
 
-    execute(toProcess, exSymbols)
+    if (filterSymbols)
+      execute(toProcess, filter(toProcess, exSymbols))
+    else
+      execute(toProcess, exSymbols)
   } catch {
     case extraction.MisformedStainlessCode(tree, msg) =>
       reporter.fatalError(tree.getPos, msg)
   }
 
-  def apply(id: Identifier, symbols: extraction.xlang.trees.Symbols): Future[Analysis] =
+  def apply(id: Identifier, symbols: xt.Symbols): Future[Analysis] =
     apply(Seq(id), symbols)
 
   protected def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[Analysis]

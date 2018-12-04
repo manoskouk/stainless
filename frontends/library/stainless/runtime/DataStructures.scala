@@ -3,9 +3,15 @@ package stainless.runtime
 import stainless.lang.error
 import stainless.annotation.library
 
-/* Implements set, map and bag operations on top of sorted lists */
+/** Implements tuples,
+  * as well as set, map and bag operations on top of sorted lists
+  */
 @library
 object DataStructures {
+
+  sealed case class _Tuple2_[T1, T2](_1: T1, _2: T2)
+  sealed case class _Tuple3_[T1, T2, T3](_1: T1, _2: T2, _3: T3)
+  sealed case class _Tuple4_[T1, T2, T3, T4](_1: T1, _2: T2, _3: T3, _4: T4)
 
   /* Compares two elements of any type. Will be filled in by the code generator */
   @library
@@ -21,132 +27,133 @@ object DataStructures {
   @library
   case class _Nil_[A]() extends _List_[A]
 
-  def setAdd[A](set: _List_[A], elem: A): _List_[A] = set match {
+  @library
+  def _setAdd_[A](set: _List_[A], elem: A): _List_[A] = set match {
     case _Nil_() => elem :: _Nil_()
     case _Cons_(h, t) =>
       val c = compare(elem, h)
       if (c < 0) elem :: h :: t
-      else if (c > 0) h :: setAdd(t, elem)
+      else if (c > 0) h :: _setAdd_(t, elem)
       else h :: t
   }
   @library
-  def elementOfSet[A](set: _List_[A], elem: A): Boolean = set match {
+  def _elementOfSet_[A](set: _List_[A], elem: A): Boolean = set match {
     case _Nil_() => false
     case _Cons_(h, t) =>
       val c = compare(elem, h)
       if (c < 0) false
-      else if (c > 0) elementOfSet(t, elem)
+      else if (c > 0) _elementOfSet_(t, elem)
       else true
   }
   @library
-  def subsetOf[A](subset: _List_[A], superset: _List_[A]): Boolean = (subset, superset) match {
+  def _subsetOf_[A](subset: _List_[A], superset: _List_[A]): Boolean = (subset, superset) match {
     case (_Nil_(), _) => true
     case (_, _Nil_()) => false
     case (_Cons_(h1, t1), _Cons_(h2, t2)) =>
       val c = compare(h1, h2)
       if (c < 0) false
-      else if (c > 0) subsetOf(subset, t2)
-      else subsetOf(t1, t2)
+      else if (c > 0) _subsetOf_(subset, t2)
+      else _subsetOf_(t1, t2)
   }
   @library
-  def setIntersection[A](s1: _List_[A], s2: _List_[A]): _List_[A] = (s1, s2) match {
+  def _setIntersection_[A](s1: _List_[A], s2: _List_[A]): _List_[A] = (s1, s2) match {
     case (_Nil_(), _) => s2
     case (_, _Nil_()) => s1
     case (_Cons_(h1, t1), _Cons_(h2, t2)) =>
       val c = compare(h1, h2)
-      if (c < 0) setIntersection(t1, s2)
-      else if (c > 0) setIntersection(s1, t2)
-      else h1 :: setIntersection(t1, t2)
+      if (c < 0) _setIntersection_(t1, s2)
+      else if (c > 0) _setIntersection_(s1, t2)
+      else h1 :: _setIntersection_(t1, t2)
   }
   @library
-  def setUnion[A](s1: _List_[A], s2: _List_[A]): _List_[A] = (s1, s2) match {
+  def _setUnion_[A](s1: _List_[A], s2: _List_[A]): _List_[A] = (s1, s2) match {
     case (_Nil_(), _) => s2
     case (_, _Nil_()) => s1
     case (_Cons_(h1, t1), _Cons_(h2, t2)) =>
       val c = compare(h1, h2)
-      if (c < 0) h1 :: setUnion(t1, s2)
-      else if (c > 0) h2 :: setUnion(s1, t2)
-      else h1 :: setUnion(t1, t2)
+      if (c < 0) h1 :: _setUnion_(t1, s2)
+      else if (c > 0) h2 :: _setUnion_(s1, t2)
+      else h1 :: _setUnion_(t1, t2)
   }
   @library
-  def setDifference[A](s1: _List_[A], s2: _List_[A]): _List_[A] = (s1, s2) match {
+  def _setDifference_[A](s1: _List_[A], s2: _List_[A]): _List_[A] = (s1, s2) match {
     case (_Nil_(), _) => _Nil_()
     case (_, _Nil_()) => s1
     case (_Cons_(h1, t1), _Cons_(h2, t2)) =>
       val c = compare(h1, h2)
-      if (c < 0) h1 :: setDifference(t1, s2)
-      else if (c > 0) setDifference(s1, t2)
-      else setDifference(t1, t2)
+      if (c < 0) h1 :: _setDifference_(t1, s2)
+      else if (c > 0) _setDifference_(s1, t2)
+      else _setDifference_(t1, t2)
   }
 
   @library @inline def min(b1: BigInt, b2: BigInt): BigInt = if (b1 <= b2) b1 else b2
   @library @inline def max(b1: BigInt, b2: BigInt): BigInt = if (b1 >= b2) b1 else b2
 
   @library
-  def bagAdd[A](bag: _List_[(A, BigInt)], elem: A): _List_[(A, BigInt)] = bag match {
+  def _bagAdd_[A](bag: _List_[(A, BigInt)], elem: A): _List_[(A, BigInt)] = bag match {
     case _Nil_() => (elem, BigInt(1)) :: _Nil_()
     case _Cons_((h, m), t) =>
       val c = compare(elem, h)
       if (c < 0) (elem, BigInt(1)) :: bag
-      else if (c > 0) (h, m) :: bagAdd(t, elem)
+      else if (c > 0) (h, m) :: _bagAdd_(t, elem)
       else (h, m + 1) :: t
   }
   @library
-  def bagMultiplicity[A](bag: _List_[(A, BigInt)], elem: A): BigInt = bag match {
+  def _bagMultiplicity_[A](bag: _List_[(A, BigInt)], elem: A): BigInt = bag match {
     case _Nil_() => 0
     case _Cons_((h, m), t) =>
       val c = compare(elem, h)
       if (c < 0) 0
-      else if (c > 0) bagMultiplicity(t, elem)
+      else if (c > 0) _bagMultiplicity_(t, elem)
       else m
   }
   @library
-  def bagIntersection[A](b1: _List_[(A, BigInt)], b2: _List_[(A, BigInt)]): _List_[(A, BigInt)] = (b1, b2) match {
+  def _bagIntersection_[A](b1: _List_[(A, BigInt)], b2: _List_[(A, BigInt)]): _List_[(A, BigInt)] = (b1, b2) match {
     case (_Nil_(), _) => b2
     case (_, _Nil_()) => b1
     case (_Cons_((h1, m1), t1), _Cons_((h2, m2), t2)) =>
       val c = compare(h1, h2)
-      if (c < 0) bagIntersection(t1, b2)
-      else if (c > 0) bagIntersection(b1, t2)
-      else (h1, min(m1, m2)) :: bagIntersection(t1, t2)
+      if (c < 0) _bagIntersection_(t1, b2)
+      else if (c > 0) _bagIntersection_(b1, t2)
+      else (h1, min(m1, m2)) :: _bagIntersection_(t1, t2)
   }
   @library
-  def bagUnion[A](b1: _List_[(A, BigInt)], b2: _List_[(A, BigInt)]): _List_[(A, BigInt)] = (b1, b2) match {
+  def _bagUnion_[A](b1: _List_[(A, BigInt)], b2: _List_[(A, BigInt)]): _List_[(A, BigInt)] = (b1, b2) match {
     case (_Nil_(), _) => b2
     case (_, _Nil_()) => b1
     case (_Cons_((h1, m1), t1), _Cons_((h2, m2), t2)) =>
       val c = compare(h1, h2)
-      if (c < 0) (h1, m1) :: bagUnion(t1, b2)
-      else if (c > 0) (h2, m2) :: bagUnion(b1, t2)
-      else (h1, m1 + m2) :: bagUnion(t1, t2)
+      if (c < 0) (h1, m1) :: _bagUnion_(t1, b2)
+      else if (c > 0) (h2, m2) :: _bagUnion_(b1, t2)
+      else (h1, m1 + m2) :: _bagUnion_(t1, t2)
   }
   @library
-  def bagDifference[A](b1: _List_[(A, BigInt)], b2: _List_[(A, BigInt)]): _List_[(A, BigInt)] = (b1, b2) match {
+  def _bagDifference_[A](b1: _List_[(A, BigInt)], b2: _List_[(A, BigInt)]): _List_[(A, BigInt)] = (b1, b2) match {
     case (_Nil_(), _) => _Nil_()
     case (_, _Nil_()) => b1
     case (_Cons_((h1, m1), t1), _Cons_((h2, m2), t2)) =>
       val c = compare(h1, h2)
-      if (c < 0) (h1, m1) :: bagDifference(t1, b2)
-      else if (c > 0) bagDifference(b1, t2)
-      else (h1, max(0, m1 - m2)) :: bagDifference(t1, t2)
+      if (c < 0) (h1, m1) :: _bagDifference_(t1, b2)
+      else if (c > 0) _bagDifference_(b1, t2)
+      else (h1, max(0, m1 - m2)) :: _bagDifference_(t1, t2)
   }
 
   @library
-  def mapApply[K, V](map: _List_[(K, V)], key: K): V = map match {
+  def _mapApply_[K, V](map: _List_[(K, V)], key: K): V = map match {
     case _Nil_() => error[V]("Key not found in map")
     case _Cons_((k, v), t) =>
       val c = compare(key, k)
       if (c < 0) error[V]("Key not found in map")
-      else if (c > 0) mapApply(t, key)
+      else if (c > 0) _mapApply_(t, key)
       else v
   }
   @library
-  def mapUpdated[K, V](map: _List_[(K, V)], key: K, value: V): _List_[(K, V)] = map match {
+  def _mapUpdated_[K, V](map: _List_[(K, V)], key: K, value: V): _List_[(K, V)] = map match {
     case _Nil_() => (key, value) :: _Nil_()
     case _Cons_((k, v), t) =>
       val c = compare(key, k)
       if (c < 0) (key, value) :: map
-      else if (c > 0) (k, v) :: mapUpdated(t, key, value)
+      else if (c > 0) (k, v) :: _mapUpdated_(t, key, value)
       else (key, value) :: t
   }
 
