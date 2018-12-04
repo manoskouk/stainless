@@ -14,6 +14,9 @@ trait Transformer extends stainless.transformers.Transformer {
 
   type Env = (s.Symbols, SymbolsManager)
 
+  protected def sort(name: String)(implicit sym: s.Symbols) = sym.lookup[s.ADTSort](name)
+  protected def fun (name: String)(implicit sym: s.Symbols) = sym.lookup[s.FunDef](name)
+
   override def transform(tp: s.Type, env: Env): t.Type = {
     implicit val impSyms = env._1
     import t._
@@ -33,10 +36,9 @@ trait Transformer extends stainless.transformers.Transformer {
         ))
 
       case s.TupleType(bases) =>
-        RecordType(env._1.lookup[s.ADTSort](s"_Tuple${bases.size}_").id)
-      case s.SetType(base) => ???
-      case s.BagType(base) => ???
-      case s.MapType(from, to) => ???
+        RecordType(sort(s"_Tuple${bases.size}_").id)
+      case s.SetType(_) | s.BagType(_) | s.MapType(_, _)  => 
+        RecordType(sort("_List_").id)
 
       case s.PiType(params, to) =>
         transform(s.FunctionType(params.map(_.getType), to.getType), env)
@@ -412,13 +414,13 @@ private [wasmgen] class ExprTransformer (
       // Tuples
       case s.Tuple(exprs) =>
         transform(s.ADT(
-          impSyms.lookup[s.ADTSort](s"_Tuple${exprs.size}_").constructors.head.id,
+          sort(s"_Tuple${exprs.size}_").constructors.head.id,
           exprs map (_.getType),
           exprs
         ), env)
       case s.TupleSelect(tuple, index) =>
         val size = tuple.getType.asInstanceOf[s.TupleType].bases.size
-        val constr = impSyms.lookup[s.ADTSort](s"_Tuple${size}_").constructors.head
+        val constr = sort(s"_Tuple${size}_").constructors.head
         val selector = constr.fields(index - 1).id
         maybeUnbox(
           t.RecordSelector(t.CastDown(transform(tuple, env), RecordType(constr.id)), selector),
@@ -428,26 +430,118 @@ private [wasmgen] class ExprTransformer (
         )
 
       // Sets
-      case s.FiniteSet(elements, base) => ???
-      case s.SetAdd(set, elem) => ???
-      case s.ElementOfSet(element, set) => ???
-      case s.SubsetOf(lhs, rhs) => ???
-      case s.SetIntersection(lhs, rhs) => ???
-      case s.SetUnion(lhs, rhs) => ???
-      case s.SetDifference(lhs, rhs) => ???
+      case s.FiniteSet(elements, base) =>
+        val empty = s.ADT(
+          sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
+          Seq(base),
+          Seq()
+        )
+        def add(set: s.Expr, elem: s.Expr) = s.ADT(
+          sort("_List_").constructors.find(_.id.name == "_Cons_").get.id,
+          Seq(base),
+          Seq(elem, set)
+        )
+        transform(elements.foldLeft[s.Expr](empty) { (rest, elem) =>
+          add(rest, elem)
+        }, env)
+      case s.SetAdd(set, elem) =>
+        FunctionInvocation(
+          fun("_setAdd_").id, Seq(),
+          Seq(transform(set, env), maybeBox(elem, AnyRefType, env))
+        )
+      case s.ElementOfSet(element, set) =>
+        FunctionInvocation(
+          fun("_elementOfSet_").id, Seq(),
+          Seq(transform(set, env), maybeBox(element, AnyRefType, env))
+        )
+      case s.SubsetOf(lhs, rhs) =>
+        FunctionInvocation(
+          fun("_subsetOf_").id, Seq(),
+          Seq(transform(lhs, env), transform(rhs, env))
+        )
+      case s.SetIntersection(lhs, rhs) =>
+        FunctionInvocation(
+          fun("_setIntersection_").id, Seq(),
+          Seq(transform(lhs, env), transform(rhs, env))
+        )
+      case s.SetUnion(lhs, rhs) =>
+        FunctionInvocation(
+          fun("_sutUnion_").id, Seq(),
+          Seq(transform(lhs, env), transform(rhs, env))
+        )
+      case s.SetDifference(lhs, rhs) =>
+        FunctionInvocation(
+          fun("_setDifference_").id, Seq(),
+          Seq(transform(lhs, env), transform(rhs, env))
+        )
 
       // Bags
-      case s.FiniteBag(elements, base) => ???
-      case s.BagAdd(bag, elem) => ???
-      case s.MultiplicityInBag(element, bag) => ???
-      case s.BagIntersection(lhs, rhs) => ???
-      case s.BagUnion(lhs, rhs) => ???
-      case s.BagDifference(lhs, rhs) => ???
+      case s.FiniteBag(elements, base) =>
+        val empty = s.ADT(
+          sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
+          Seq(s.TupleType(Seq(base, s.IntegerType()))),
+          Seq()
+        )
+        def add(map: s.Expr, elem: s.Expr) = s.ADT(
+          sort("_List_").constructors.find(_.id.name == "_Cons_").get.id,
+          Seq(s.TupleType(Seq(base, s.IntegerType()))),
+          Seq(elem, map)
+        )
+        transform(elements.foldLeft[s.Expr](empty) { case (rest, (elem, mult)) =>
+          add(rest, s.Tuple(Seq(elem, mult)))
+        }, env)
+
+      case s.BagAdd(bag, elem) =>
+        FunctionInvocation(
+          fun("_bagAdd_").id, Seq(),
+          Seq(transform(bag, env), maybeBox(elem, AnyRefType, env))
+        )
+      case s.MultiplicityInBag(element, bag) =>
+        FunctionInvocation(
+          fun("_bagMultiplicity_").id, Seq(),
+          Seq(transform(bag, env), maybeBox(element, AnyRefType, env))
+        )
+      case s.BagIntersection(lhs, rhs) =>
+        FunctionInvocation(
+          fun("_bagIntersection_").id, Seq(),
+          Seq(transform(lhs, env), transform(rhs, env))
+        )
+      case s.BagUnion(lhs, rhs) =>
+        FunctionInvocation(
+          fun("_bagUnion_").id, Seq(),
+          Seq(transform(lhs, env), transform(rhs, env))
+        )
+      case s.BagDifference(lhs, rhs) =>
+        FunctionInvocation(
+          fun("_bagDifference_").id, Seq(),
+          Seq(transform(lhs, env), transform(rhs, env))
+        )
 
       // Maps
-      case s.FiniteMap(pairs, default, keyType, valueType) => ???
-      case s.MapApply(map, key) => ???
+      case s.FiniteMap(pairs, default, keyType, valueType) => 
+        val empty = s.ADT(
+          sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
+          Seq(s.TupleType(Seq(keyType, valueType))),
+          Seq()
+        )
+        def add(map: s.Expr, elem: s.Expr) = s.ADT(
+          sort("_List_").constructors.find(_.id.name == "_Cons_").get.id,
+          Seq(s.TupleType(Seq(keyType, valueType))),
+          Seq(elem, map)
+        )
+        transform(pairs.foldLeft[s.Expr](empty) { case (rest, (key, value)) =>
+          add(rest, s.Tuple(Seq(key, value)))
+        }, env)
+      case s.MapApply(map, key) =>
+        FunctionInvocation(
+          fun("_mapApply_").id, Seq(),
+          Seq(transform(map, env), maybeBox(key, AnyRefType, env))
+        )
       case s.MapUpdated(map, key, value) => ???
+        FunctionInvocation(
+          fun("_mapUndated_").id, Seq(),
+          Seq(transform(map, env), maybeBox(key, AnyRefType, env), maybeBox(value, AnyRefType, env))
+        )
 
       // We do not translate these for now
       case s.Forall(params, body) => ???
