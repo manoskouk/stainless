@@ -466,7 +466,7 @@ private [wasmgen] class ExprTransformer (
         )
       case s.SetUnion(lhs, rhs) =>
         FunctionInvocation(
-          fun("_sutUnion_").id, Seq(),
+          fun("_setUnion_").id, Seq(),
           Seq(transform(lhs, env), transform(rhs, env))
         )
       case s.SetDifference(lhs, rhs) =>

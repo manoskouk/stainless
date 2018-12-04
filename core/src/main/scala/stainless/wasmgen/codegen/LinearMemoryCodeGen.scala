@@ -85,8 +85,14 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkInequality(s: t.Symbols): FunDef = {
     implicit val impS = s
     type BinContext = (Expr, Expr) => (Expr, String)
+    def mkSign(e: Expr): Expr = e.getType match {
+      case `i32` => e
+      case `i64` => Wrap(i32, e)
+      case `f32` => Truncate(i32, Signed, copysign(F32Const(1), e))
+      case `f64` => Truncate(i32, Signed, copysign(F64Const(1), e))
+    }
     def boxedIneq(tpe: Type)(name: String = tpe.toString): BinContext = (lhs, rhs) =>
-      (sub(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
+      (mkSign(sub(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4))))), name)
 
     def recordIneq(rec: t.RecordSort, lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): (Expr, String) = {
       // We get offsets of all fields except first (typeTag) which we know is equal already
@@ -98,7 +104,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         if(isRefType(fld.getType)) {
           Call(refEqualityName, i32, Seq(l, r))
         } else {
-          sub(l, r)
+          mkSign(sub(l, r))
         }
       }
       (fieldIneqs.foldRight(I32Const(0): Expr){ case (e, rest) =>

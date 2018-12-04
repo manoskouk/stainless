@@ -183,13 +183,14 @@ object Printer {
           Indented(doc(e)),
           ")"
         )
+      case Truncate(to, sign, e) =>
+        Stacked(
+          s"($to.trunc_$sign/${e.getType}",
+          Indented(doc(e)),
+          ")"
+        )
       case Sequence(es) =>
         Stacked(es map doc : _*)
-        //Stacked(
-        //  "(",
-        //  Indented(Stacked(es map doc : _*)),
-        //  ")"
-        //)
     }
 
   }
