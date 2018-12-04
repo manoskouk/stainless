@@ -3,14 +3,19 @@ package utils
 
 trait DefinitionIdFinder extends transformers.DefinitionTraverser {
   val s: trees.Symbols
-  private val defNames = s.sorts.keys.toSet ++ s.functions.keys.toSet
+  private val idsMap = {
+    s.functions.keys.map(id => id -> id) ++
+    s.sorts.values.flatMap { s =>
+      s.constructors.map(c => c.id -> s.id) ++ Seq(s.id -> s.id)
+    }
+  }.toMap
 
   def initEnv = ()
   type Env = Unit
 
-  protected var ids : Set[Identifier] = Set()
+  protected var ids: Set[Identifier] = Set()
   override def traverse(id: Identifier, env: Env): Unit = {
-    if (defNames(id)) ids += id
+    ids ++= idsMap.get(id)
   }
 
   def doTraverse(fd: trees.FunDef): Set[Identifier] = {
@@ -32,17 +37,21 @@ trait DependenciesFinder {
 
   def findDependencies(roots: Set[Identifier], s: t.Symbols): t.Symbols = {
     val tr = traverser(s)
-    import inox.utils.fixpoint
+    var found = Set[Identifier]()
+    var toExplore = roots
 
-    val ids = fixpoint[Set[Identifier]]{ ids =>
-      s.functions.values.filter(f => ids(f.id)).toSet.flatMap((fd: t.FunDef) => tr.doTraverse(fd)) ++
-      s.sorts.values.toSet.flatMap((s: t.ADTSort) => tr.doTraverse(s)) ++
-      ids
-    }(roots)
+    while(toExplore.nonEmpty) {
+      val fIds = s.functions.values.view.force.filter(f => toExplore(f.id))
+        .flatMap((fd: t.FunDef) => tr.doTraverse(fd)).toSet
+      val sIds = s.sorts.values.view.force.filter(s => toExplore(s.id))
+        .flatMap((s: t.ADTSort) => tr.doTraverse(s)).toSet
+      found ++= toExplore
+      toExplore = (fIds ++ sIds) -- found
+    }
 
     t.NoSymbols
-      .withFunctions(s.functions.values.toSeq.filter(f => ids(f.id)))
-      .withSorts(s.sorts.values.toSeq.filter(f => ids(f.id)))
+      .withFunctions(s.functions.values.toSeq.filter(f => found(f.id)))
+      .withSorts(s.sorts.values.toSeq.filter(f => found(f.id)))
   }
 }
 

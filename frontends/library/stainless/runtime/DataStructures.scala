@@ -9,9 +9,9 @@ import stainless.annotation.library
 @library
 object DataStructures {
 
-  sealed case class _Tuple2_[T1, T2](_1: T1, _2: T2)
-  sealed case class _Tuple3_[T1, T2, T3](_1: T1, _2: T2, _3: T3)
-  sealed case class _Tuple4_[T1, T2, T3, T4](_1: T1, _2: T2, _3: T3, _4: T4)
+  sealed case class _Tuple2_[T1, T2](e1: T1, e2: T2)
+  sealed case class _Tuple3_[T1, T2, T3](e1: T1, e2: T2, e3: T3)
+  sealed case class _Tuple4_[T1, T2, T3, T4](e1: T1, e2: T2, e3: T3, e4: T4)
 
   /* Compares two elements of any type. Will be filled in by the code generator */
   @library

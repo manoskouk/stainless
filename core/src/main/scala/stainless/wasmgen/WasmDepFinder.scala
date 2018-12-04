@@ -65,7 +65,7 @@ class WasmDependenciesFinder extends DependenciesFinder {
 
   // Always add the internal _List_ sort
   override def findDependencies(roots: Set[Identifier], s: Symbols): Symbols = {
-    super.findDependencies(roots, s).withSorts(Seq(s.lookup("_List_")))
+    super.findDependencies(roots, s).withSorts(Seq(s.lookup[ADTSort]("_List_")))
   }
 }
 
