@@ -64,35 +64,35 @@ private[wasmgen] class SymbolsManager {
   import trees._
   import scala.collection.mutable.{Map => MMap}
 
-  private val newFunctions_ : MMap[Identifier, FunDef] = MMap()
-  private val newRecords_ : MMap[Identifier, RecordSort] = MMap()
+  private val functions_ : MMap[Identifier, FunDef] = MMap()
+  private val records_ : MMap[Identifier, RecordSort] = MMap()
   private val boxedSorts: MMap[Type, Identifier] = MMap()
   private val funRecords: MMap[FunctionType, Identifier] = MMap()
 
-  def addFunction(fd: FunDef): Unit = newFunctions_ += fd.id -> fd
+  def addFunction(fd: FunDef): Unit = functions_ += fd.id -> fd
 
   def funPointerSort(ft: FunctionType): Identifier =
     funRecords.getOrElseUpdate(ft, {
       val fr = new FunPointerSort(FreshIdentifier("`" + ft.asString(PrinterOptions()) + "`"), ft)
-      newRecords_ += fr.id -> fr
+      records_ += fr.id -> fr
       fr.id
     })
 
   def closureSort(funType: FunctionType, env: Seq[ValDef]): Identifier = {
     // Always make a new closure sort
     val cs = new ClosureSort(funPointerSort(funType), env)
-    newRecords_ += cs.id -> cs
+    records_ += cs.id -> cs
     cs.id
   }
 
   def boxedSort(tpe: Type): Identifier = boxedSorts.getOrElseUpdate(tpe, {
     val s = new BoxedSort(tpe)
-    newRecords_ += s.id -> s
+    records_ += s.id -> s
     s.id
   })
 
-  def functions = newFunctions_
-  def records = newRecords_
+  def functions = functions_
+  def records = records_
 }
 
 
@@ -603,7 +603,7 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
     for {_ <- 0 to 5} sortCodes.nextGlobal
   }
 
-  def transform(sort: s.ADTSort, env: Env): (t.RecordADTSort, Seq[t.ConstructorSort]) = {
+  def transform(sort: s.ADTSort, env: Env): Seq[t.RecordSort] = {
     val eqId = FreshIdentifier(s"eq${sort.id.name}")
 
     val parent = new t.RecordADTSort(transform(sort.id, env)).copiedFrom(sort)
@@ -617,36 +617,17 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       ).copiedFrom(cons)
     }
 
-    (parent, children)
+    parent +: children
   }
 
-  //private def mkTupleSort(size: Int): s.ADTSort = {
-  //  require(size >= 2)
-  //  val dsl = new inox.ast.DSL { val trees: s.type = s }
-  //  val sortName = SymbolIdentifier(s"Tuple$size")
-  //  val constrName = FreshIdentifier(s"Tuple${size}C")
-  //  dsl.mkSort(sortName)( (1 to size).map(ind => s"T$ind") : _* )( tps =>
-  //    Seq((constrName,
-  //      tps.zipWithIndex.map { case (tpe, ind) =>
-  //        s.ValDef(FreshIdentifier(s"_${ind+1}"), tpe)
-  //      }
-  //    ))
-  //  )
-  //}
-
-  def transform(syms0: s.Symbols): t.Symbols = {
+  def transform(syms: s.Symbols): t.Symbols = {
 
     // (0) Make tuple sorts
-    val syms = syms0//.withSorts((2 to 4).map(mkTupleSort))
     val manager = new SymbolsManager
     val env0 = (syms, manager)
 
-    // (1.1) Transform sorts
-    val sorts = syms.sorts.values.toSeq.map(transform(_, env0))
-    val allSorts = sorts.flatMap(s => s._1 +: s._2).map(s => s.id -> s).toMap
-
-    // (1.2) These are the program types (initial symbols)
-    val initSymbols = t.Symbols(allSorts, Map())
+    // (1) Transform sorts, make them to starting symbols
+    val initSymbols = t.NoSymbols.withRecords(syms.sorts.values.toSeq.flatMap(transform(_, env0)))
 
     // (2) Transform functions in program
     val tr = new ExprTransformer(manager, keepContracts = true, syms, initSymbols.records)
@@ -658,13 +639,12 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    ret.records foreach (r => println(r._2.asString))
-    ret.functions foreach (r => println(r._2.asString))
+    //ret.records foreach (r => println(r._2.asString))
+    //ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 
     ret
   }
 }
-
 
