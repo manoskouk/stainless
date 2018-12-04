@@ -71,8 +71,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             val eqs = allEqs(GetLocal("lhs"), GetLocal("rhs"))
             // We use i32 as default, whatever, should not happen
             val jump = Br_Table(eqs.map(_._2), eqs.head._2, Load(i32, None, GetLocal("lhs")), None)
-            eqs.foldLeft(jump: Expr){ case (first, (eq, label)) =>
-              Sequence(Seq(Block(label, first), Return(eq)))
+            eqs.foldLeft(jump: Expr){ case (first, (equality, label)) =>
+              Sequence(Seq(Block(label, first), Return(equality)))
             }
           },
           Return(I32Const(0))
