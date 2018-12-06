@@ -105,7 +105,6 @@ trait ComponentRun { self =>
     } (ids.flatMap(id => exSymbols.lookupFunction(id).toSeq).filter(extractionFilter.shouldBeChecked).map(_.id).toSet)
 
     val toProcess = toCheck.toSeq.sortBy(exSymbols.getFunction(_).getPos)
-    println(toProcess)
 
     for (id <- toProcess) {
       val fd = exSymbols.getFunction(id)
