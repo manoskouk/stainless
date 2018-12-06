@@ -14,7 +14,7 @@ import inox.ast.Identifier
   *
   * reclang is defined by the following grammars (nonterminals in ' '):
   *
-  *   'type' ::= Boolean | Int | Long | Double | Array(type) | ('type'*) => 'type' | 'id'
+  *   'type' ::= Boolean | Int | Long | Double | Array('type') | ('type'*) => 'type' | 'id'
   *
   * where id refers to the name of a record sort defined in the program.
   * There is no type polymorphism.

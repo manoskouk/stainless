@@ -135,9 +135,6 @@ object Expressions { self =>
     val getType = tpe
   }
 
-  case object Drop extends Expr {
-    val getType = void
-  }
   case class Return(value: Expr) extends Expr {
     val getType = void
   }

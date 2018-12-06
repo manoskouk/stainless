@@ -57,7 +57,7 @@ class WasmComponentRun(override val pipeline: StainlessPipeline)
 
   override lazy val dependenciesFinder: DependenciesFinder { val t: stainless.trees.type } = new WasmDependenciesFinder
 
-  protected def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[WasmAnalysis] = {
+  private[stainless] def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[WasmAnalysis] = {
     Future.successful {
       val module = codegen.LinearMemoryCodeGen.transform((new intermediate.Lowering).transform(symbols))
       new wasm.FileWriter(context, module, functions.map(_.uniqueName).toSet).writeFiles()

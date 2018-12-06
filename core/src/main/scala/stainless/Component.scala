@@ -125,6 +125,6 @@ trait ComponentRun { self =>
   def apply(id: Identifier, symbols: xt.Symbols): Future[Analysis] =
     apply(Seq(id), symbols)
 
-  protected def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[Analysis]
+  private[stainless] def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[Analysis]
 }
 
