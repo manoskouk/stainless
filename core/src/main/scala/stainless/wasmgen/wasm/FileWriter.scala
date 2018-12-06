@@ -81,7 +81,7 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |loadWebAssembly('$moduleFile', importObject).then(function(instance) {
           |""".stripMargin ++
           module.functions.filter(f => toExecute(f.name)).map { f =>
-        s"|  console.log(instance.exports.${f.name}());\n".stripMargin // FIXME: Add printing for all types to the wasm side
+      s"""|  console.log("${f.name} = " + instance.exports.${f.name}());\n""".stripMargin // FIXME: Add printing for all types to the wasm side
           }.mkString ++
        """|}).catch( function(error) {
           |  console.log("Error in wasm application")
