@@ -17,8 +17,8 @@ package object frontend {
    */
   object optPersistentCache extends inox.FlagOptionDef("cache", false)
 
-  /** Do not do any dependency analysis, give the whole program to active components
-    *
+  /** Do not use registry to create minimal partial programs,
+    * do a dependency analysis after collecting the whole program
     */
   object optBatchedProgram extends inox.FlagOptionDef("batched", false)
 
