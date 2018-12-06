@@ -192,7 +192,7 @@ trait CodeGeneration {
       case t.ArrayCopy(from, to, startFrom, startTo, length) =>
         val t.ArrayType(tpe) = from.getType
         val trTpe = transform(tpe)
-        Call(s"_array_copy_${trTpe}_", trTpe, Seq(from, to, startFrom, startTo, length) map transform)
+        Call(arrayCopyName(trTpe), i32, Seq(from, to, startFrom, startTo, length) map transform)
 
       case t.Plus(lhs, rhs) =>
         mkBin(add, lhs, rhs)

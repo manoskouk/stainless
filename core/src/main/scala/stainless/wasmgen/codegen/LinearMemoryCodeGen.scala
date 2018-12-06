@@ -156,7 +156,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     ) { implicit lh =>
       val index = lh.getFreshLocal(freshLabel("index"), i32)
       val loop = freshLabel("loop")
-      @inline def getElemAddr(arr: String, start: String) = {
+      def getElemAddr(arr: String, start: String) = {
         // arr + (1 + startIndex + index) * size
         add(
           GetLocal(arr),
@@ -172,7 +172,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(GetLocal(index), GetLocal("length")),
             Sequence(Seq(
               Store(None, getElemAddr("to", "startTo"), Load(tpe, None, getElemAddr("from", "startFrom"))),
-              Br(loop)
+              Br(loop),
+              SetLocal(index, add(GetLocal(index), I32Const(1)))
             )),
             Nop
           )
@@ -298,11 +299,14 @@ object LinearMemoryCodeGen extends CodeGeneration {
   }
 
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr = {
-    Store(
-      None,
-      add(array, add(I32Const(4), mul(index, I32Const(value.getType.size)))),
-      value
-    )
+    Sequence(Seq(
+      Store(
+        None,
+        add(array, add(I32Const(4), mul(index, I32Const(value.getType.size)))),
+        value
+      ),
+      I32Const(0) // Unit literal
+    ))
   }
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
