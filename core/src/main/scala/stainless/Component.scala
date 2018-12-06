@@ -5,7 +5,6 @@ package stainless
 import utils.{CheckFilter, DefinitionIdFinder, DependenciesFinder}
 import extraction.xlang.{trees => xt}
 import io.circe._
-import stainless.ast.Trees
 
 import scala.concurrent.Future
 import scala.language.existentials
