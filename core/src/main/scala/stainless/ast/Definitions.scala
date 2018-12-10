@@ -55,7 +55,6 @@ trait Definitions extends inox.ast.Definitions { self: Trees =>
 
     protected class Lookup {
       protected def find[T](name: String, map: Map[Identifier, T]): Option[T] = map.find(_._1 match {
-        case SymbolIdentifier(`name`) => true
         case id if id.name == name => true
         case _ => false
       }).map(_._2)
