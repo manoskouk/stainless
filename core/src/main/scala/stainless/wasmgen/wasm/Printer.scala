@@ -94,7 +94,7 @@ object Printer {
         )
       case Loop(label, body) =>
         Stacked(
-          s"(loop $$$label ${expr.getType}",
+          s"(loop $$$label (result ${expr.getType})",
           Indented(doc(body)),
           ")"
         )
@@ -155,6 +155,12 @@ object Printer {
           ")"
         )
       case Unreachable => "unreachable"
+      case Drop(expr) =>
+        Stacked(
+          s"(drop",
+          Indented(doc(expr)),
+          ")"
+        )
       case Nop => "nop"
       case GetLocal(label)  => s"(get_local $$$label)"
       case SetLocal(label, value) =>

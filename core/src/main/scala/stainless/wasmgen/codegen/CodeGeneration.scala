@@ -138,7 +138,7 @@ trait CodeGeneration {
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
       case t.Sequence(es) =>
-        Sequence(es map transform)
+        Sequence ( es.init.map(e => Drop(transform(e))) :+ transform(es.last) )
 
       case t.IfExpr(cond, thenn, elze) =>
         If(

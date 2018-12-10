@@ -138,6 +138,9 @@ object Expressions { self =>
   case class Return(value: Expr) extends Expr {
     val getType = void
   }
+  case class Drop(value: Expr) extends Expr {
+    val getType = void
+  }
   case object Unreachable extends Expr {
     val getType = void
   }

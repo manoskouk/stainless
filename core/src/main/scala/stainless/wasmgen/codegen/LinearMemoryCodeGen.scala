@@ -169,17 +169,17 @@ object LinearMemoryCodeGen extends CodeGeneration {
         Loop(loop,
           If(
             freshLabel("label"),
-            lt(GetLocal(index), GetLocal("length")),
+            lt(Signed)(GetLocal(index), GetLocal("length")),
             Sequence(Seq(
               Store(None, getElemAddr("to", "startTo"), Load(tpe, None, getElemAddr("from", "startFrom"))),
-              Br(loop),
-              SetLocal(index, add(GetLocal(index), I32Const(1)))
+              SetLocal(index, add(GetLocal(index), I32Const(1))),
+              Br(loop)
             )),
             Nop
           )
-        )
+        ),
+        I32Const(0) // Unit literal
       ))
-      I32Const(0) // Unit literal
     }
   }
 

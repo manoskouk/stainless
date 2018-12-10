@@ -18,33 +18,35 @@ class WasmDefIdFinder(val s: Symbols) extends DefinitionIdFinder {
         val TupleType(ts) = tuple.getType(s)
         ids += sort(s"_Tuple${ts.size}_")
       // Sets
-      case SetAdd(set, elem) =>
+      case FiniteSet(_, _) =>
         ids += fun("_setAdd_")
-      case ElementOfSet(element, set) =>
+      case SetAdd(_, _) =>
+        ids += fun("_setAdd_")
+      case ElementOfSet(_, _) =>
         ids += fun("_elementOfSet_")
-      case SubsetOf(lhs, rhs) =>
+      case SubsetOf(_, _) =>
         ids += fun("_subsetOf_")
-      case SetIntersection(lhs, rhs) =>
+      case SetIntersection(_, _) =>
         ids += fun("_setIntersection_")
-      case SetUnion(lhs, rhs) =>
+      case SetUnion(_, _) =>
         ids += fun("_setUnion_")
-      case SetDifference(lhs, rhs) =>
+      case SetDifference(_, _) =>
         ids += fun("_setDifference_")
       // Bags
-      case BagAdd(bag, elem) =>
+      case BagAdd(_, _) =>
         ids += fun("_bagAdd_")
-      case MultiplicityInBag(element, bag) =>
+      case MultiplicityInBag(_, _) =>
         ids += fun("_bagMultiplicity_")
-      case BagIntersection(lhs, rhs) =>
+      case BagIntersection(_, _) =>
         ids += fun("_bagIntersection_")
-      case BagUnion(lhs, rhs) =>
+      case BagUnion(_, _) =>
         ids += fun("_bagUnion_")
-      case BagDifference(lhs, rhs) =>
+      case BagDifference(_, _) =>
         ids += fun("_bagDifference_")
       // Maps
-      case MapApply(map, key) =>
+      case MapApply(_, _) =>
         ids += fun("_mapApply_")
-      case MapUpdated(map, key, value) =>
+      case MapUpdated(_, _, _) =>
         ids += fun("_mapUpdated_")
       case _ =>
     }

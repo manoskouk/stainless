@@ -430,20 +430,19 @@ private [wasmgen] class ExprTransformer (
         )
 
       // Sets
-      case s.FiniteSet(elements, base) =>
+      case s.FiniteSet(Seq(), base) =>
         val empty = s.ADT(
           sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
           Seq(base),
           Seq()
         )
-        def add(set: s.Expr, elem: s.Expr) = s.ADT(
-          sort("_List_").constructors.find(_.id.name == "_Cons_").get.id,
-          Seq(base),
-          Seq(elem, set)
-        )
-        transform(elements.foldLeft[s.Expr](empty) { (rest, elem) =>
-          add(rest, elem)
-        }, env)
+        transform(empty, env)
+      case s.FiniteSet(elements, base) =>
+        transform(
+          elements.foldLeft[s.Expr](s.FiniteSet(Seq(), base)){ (rest, elem) =>
+            s.SetAdd(rest, elem)
+          },
+          env)
       case s.SetAdd(set, elem) =>
         FunctionInvocation(
           fun("_setAdd_").id, Seq(),
@@ -475,7 +474,7 @@ private [wasmgen] class ExprTransformer (
           Seq(transform(lhs, env), transform(rhs, env))
         )
 
-      // Bags
+      // Bags FIXME FiniteBag is wrong
       case s.FiniteBag(elements, base) =>
         val empty = s.ADT(
           sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
@@ -517,8 +516,8 @@ private [wasmgen] class ExprTransformer (
           Seq(transform(lhs, env), transform(rhs, env))
         )
 
-      // Maps
-      case s.FiniteMap(pairs, default, keyType, valueType) => 
+      // Maps FIXME maps are wrong
+      case s.FiniteMap(pairs, default, keyType, valueType) =>
         val empty = s.ADT(
           sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
           Seq(s.TupleType(Seq(keyType, valueType))),
@@ -639,8 +638,8 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    //ret.records foreach (r => println(r._2.asString))
-    //ret.functions foreach (r => println(r._2.asString))
+    ret.records foreach (r => println(r._2.asString))
+    ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 
