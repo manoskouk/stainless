@@ -474,26 +474,28 @@ private [wasmgen] class ExprTransformer (
           Seq(transform(lhs, env), transform(rhs, env))
         )
 
-      // Bags FIXME FiniteBag is wrong
+      // Bags
       case s.FiniteBag(elements, base) =>
         val empty = s.ADT(
           sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
           Seq(s.TupleType(Seq(base, s.IntegerType()))),
           Seq()
         )
-        def add(map: s.Expr, elem: s.Expr) = s.ADT(
-          sort("_List_").constructors.find(_.id.name == "_Cons_").get.id,
-          Seq(s.TupleType(Seq(base, s.IntegerType()))),
-          Seq(elem, map)
-        )
-        transform(elements.foldLeft[s.Expr](empty) { case (rest, (elem, mult)) =>
-          add(rest, s.Tuple(Seq(elem, mult)))
-        }, env)
-
+        elements.foldLeft[Expr](transform(empty, env)) {
+          case (rest, (elem, mult)) =>
+            FunctionInvocation(
+              fun("_bagAdd_").id, Seq(),
+              Seq(rest, maybeBox(elem, AnyRefType, env), transform(mult, env))
+            )
+        }
       case s.BagAdd(bag, elem) =>
         FunctionInvocation(
           fun("_bagAdd_").id, Seq(),
-          Seq(transform(bag, env), maybeBox(elem, AnyRefType, env))
+          Seq(
+            transform(bag, env),
+            maybeBox(elem, AnyRefType, env),
+            transform(s.IntegerLiteral(BigInt(1)), env)
+          )
         )
       case s.MultiplicityInBag(element, bag) =>
         FunctionInvocation(
@@ -517,20 +519,24 @@ private [wasmgen] class ExprTransformer (
         )
 
       // Maps FIXME maps are wrong
+      case s.FiniteMap(Seq(), default, keyType, valueType) =>
+        val empty = s.Tuple(Seq(
+          s.ADT(
+            sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
+            Seq(s.TupleType(Seq(keyType, valueType))),
+            Seq()
+          ),
+          default
+        ))
+        transform(empty, env)
       case s.FiniteMap(pairs, default, keyType, valueType) =>
-        val empty = s.ADT(
-          sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
-          Seq(s.TupleType(Seq(keyType, valueType))),
-          Seq()
+        val empty = s.FiniteMap(Seq(), default, keyType, valueType)
+        transform(
+          pairs.foldLeft[s.Expr](empty) { case (rest, (key, value)) =>
+            s.MapUpdated(rest, key, value)
+          },
+          env
         )
-        def add(map: s.Expr, elem: s.Expr) = s.ADT(
-          sort("_List_").constructors.find(_.id.name == "_Cons_").get.id,
-          Seq(s.TupleType(Seq(keyType, valueType))),
-          Seq(elem, map)
-        )
-        transform(pairs.foldLeft[s.Expr](empty) { case (rest, (key, value)) =>
-          add(rest, s.Tuple(Seq(key, value)))
-        }, env)
       case s.MapApply(map, key) =>
         FunctionInvocation(
           fun("_mapApply_").id, Seq(),
@@ -638,8 +644,8 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    ret.records foreach (r => println(r._2.asString))
-    ret.functions foreach (r => println(r._2.asString))
+    //ret.records foreach (r => println(r._2.asString))
+    //ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 

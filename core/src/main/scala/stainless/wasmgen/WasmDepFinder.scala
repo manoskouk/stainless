@@ -18,9 +18,7 @@ class WasmDefIdFinder(val s: Symbols) extends DefinitionIdFinder {
         val TupleType(ts) = tuple.getType(s)
         ids += sort(s"_Tuple${ts.size}_")
       // Sets
-      case FiniteSet(_, _) =>
-        ids += fun("_setAdd_")
-      case SetAdd(_, _) =>
+      case FiniteSet(_, _) | SetAdd(_, _) =>
         ids += fun("_setAdd_")
       case ElementOfSet(_, _) =>
         ids += fun("_elementOfSet_")
@@ -33,7 +31,7 @@ class WasmDefIdFinder(val s: Symbols) extends DefinitionIdFinder {
       case SetDifference(_, _) =>
         ids += fun("_setDifference_")
       // Bags
-      case BagAdd(_, _) =>
+      case FiniteBag(_, _) | BagAdd(_, _) =>
         ids += fun("_bagAdd_")
       case MultiplicityInBag(_, _) =>
         ids += fun("_bagMultiplicity_")
@@ -44,7 +42,7 @@ class WasmDefIdFinder(val s: Symbols) extends DefinitionIdFinder {
       case BagDifference(_, _) =>
         ids += fun("_bagDifference_")
       // Maps
-      case MapApply(_, _) =>
+      case FiniteMap(_, _, _, _) | MapApply(_, _) =>
         ids += fun("_mapApply_")
       case MapUpdated(_, _, _) =>
         ids += fun("_mapUpdated_")

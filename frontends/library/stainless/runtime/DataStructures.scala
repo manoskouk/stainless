@@ -90,13 +90,13 @@ object DataStructures {
   @library @inline def max(b1: BigInt, b2: BigInt): BigInt = if (b1 >= b2) b1 else b2
 
   @library
-  def _bagAdd_[A](bag: _List_[(A, BigInt)], elem: A): _List_[(A, BigInt)] = bag match {
-    case _Nil_() => (elem, BigInt(1)) :: _Nil_()
+  def _bagAdd_[A](bag: _List_[(A, BigInt)], elem: A, mult: BigInt): _List_[(A, BigInt)] = bag match {
+    case _Nil_() => (elem, mult) :: _Nil_()
     case _Cons_((h, m), t) =>
       val c = _compare_(elem, h)
-      if (c < 0) (elem, BigInt(1)) :: bag
-      else if (c > 0) (h, m) :: _bagAdd_(t, elem)
-      else (h, m + 1) :: t
+      if (c < 0) (elem, mult) :: bag
+      else if (c > 0) (h, m) :: _bagAdd_(t, elem, mult)
+      else (h, m + mult) :: t
   }
   @library
   def _bagMultiplicity_[A](bag: _List_[(A, BigInt)], elem: A): BigInt = bag match {
@@ -139,22 +139,25 @@ object DataStructures {
   }
 
   @library
-  def _mapApply_[K, V](map: _List_[(K, V)], key: K): V = map match {
-    case _Nil_() => error[V]("Key not found in map")
+  def _mapApply_[K, V](map: (_List_[(K, V)], V), key: K): V = map._1 match {
+    case _Nil_() => map._2
     case _Cons_((k, v), t) =>
       val c = _compare_(key, k)
-      if (c < 0) error[V]("Key not found in map")
-      else if (c > 0) _mapApply_(t, key)
+      if (c < 0) map._2
+      else if (c > 0) _mapApply_((t, map._2), key)
       else v
   }
   @library
-  def _mapUpdated_[K, V](map: _List_[(K, V)], key: K, value: V): _List_[(K, V)] = map match {
-    case _Nil_() => (key, value) :: _Nil_()
-    case _Cons_((k, v), t) =>
-      val c = _compare_(key, k)
-      if (c < 0) (key, value) :: map
-      else if (c > 0) (k, v) :: _mapUpdated_(t, key, value)
-      else (key, value) :: t
+  def _mapUpdated_[K, V](map: (_List_[(K, V)], V), key: K, value: V): (_List_[(K, V)], V) = {
+    def rec(pairs: _List_[(K, V)]): _List_[(K, V)] = pairs match {
+      case _Nil_() => (key, value) :: _Nil_()
+      case _Cons_((k, v), t) =>
+        val c = _compare_(key, k)
+        if (c < 0) (key, value) :: pairs
+        else if (c > 0) (k, v) :: rec(t)
+        else (key, value) :: t
+    }
+    (rec(map._1), map._2)
   }
 
 }
