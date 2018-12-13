@@ -2,13 +2,23 @@
 
 package stainless.wasmgen.wasm
 
-import Expressions.Expr
+import Expressions.{Expr, Const}
 import Types.Type
 
 /** Definitions for wasm programs */
 object Definitions {
 
   case class ValDef(name: Label, tpe: Type)
+
+  case class Global(name: Label, isMutable: Boolean, private var init_ : Const) {
+    val tpe = init_.getType
+    val toVal = ValDef(name, tpe)
+    def update(c: Const) = {
+      require(c.getType == tpe)
+      init_ = c
+    }
+    def init = init_
+  }
 
   case class FunDef private
     (name: String, args: Seq[ValDef], returnType: Type, locals: Seq[ValDef], body: Expr)
@@ -40,4 +50,6 @@ object Definitions {
   case class Table(funs: Seq[Label]) {
     def indexOf(fun: Label) = funs.indexOf(fun)
   }
+
+  case class Data(offset: Int, bytes: Seq[Byte])
 }

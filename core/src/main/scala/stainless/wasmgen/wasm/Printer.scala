@@ -11,19 +11,26 @@ object Printer {
   private implicit def s2d(s: String) = Raw(s)
 
   private def doc(mod: Module): Document = {
-    val Module(name, imports, globals, table, functions) = mod
+    val Module(name, imports, globals, table, data, functions) = mod
     Stacked(
       "(module ",
       Indented(Stacked(imports map doc)),
-      Indented(Stacked(globals map mkGlobal)),
+      Indented(Stacked(globals map doc)),
       Indented(doc(table)),
+      Indented(Stacked(data map doc)),
       Indented(Stacked(functions map doc)),
       ")"
     )
   }
 
-  private def mkGlobal(g: ValDef): Document = {
-    Lined(Seq(s"(global $$${g.name} (mut ${g.tpe}) ", doc(typeToZero(g.tpe)), ")"))
+  private def doc(g: Global): Document = {
+    val tpe = if(g.isMutable) s"(mut ${g.tpe})" else g.tpe.toString
+    Lined(Seq(s"(global $$${g.name} $tpe ", doc(g.init), ")"))
+  }
+
+  private def doc(data: Data): Document = {
+    def printByte(b: Byte): String = if (b)
+    s"""(data (offset (i32.const ${data.offset}) "${data.bytes}")"""
   }
 
   private def doc(t: Table): Document = {

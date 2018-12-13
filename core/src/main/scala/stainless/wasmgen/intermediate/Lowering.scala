@@ -370,14 +370,6 @@ private [wasmgen] class ExprTransformer (
           env
         )
 
-      // Strings
-      case s.StringLiteral(str) =>
-        val strV = Variable.fresh("strConst", StrType)
-        Let(strV.toVal, NewArray(Int32Literal(str.length), Int32Type(), None),
-          Sequence(str.zipWithIndex.map{
-            case (ch, index) => ArraySet(strV, Int32Literal(index), Int32Literal(ch.toInt))
-          } :+ strV)
-        )
       case s.StringConcat(lhs, rhs) =>
         val l = Variable.fresh("lhs", StrType)
         val r = Variable.fresh("rhs", StrType)

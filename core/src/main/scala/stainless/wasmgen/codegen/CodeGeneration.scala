@@ -14,17 +14,19 @@ trait CodeGeneration {
   protected case class FunEnv(
     s: t.Symbols,
     gh: GlobalsHandler,
+    dh: DataHandler,
     tab: Table
   ) {
-    def env(lh: LocalsHandler): Env = Env(s, lh, gh, tab)
+    def env(lh: LocalsHandler): Env = Env(s, lh, gh, dh, tab)
   }
   protected case class Env(
     s: t.Symbols,
     lh: LocalsHandler,
     gh: GlobalsHandler,
+    dh: DataHandler,
     tab: Table
   ) {
-    def fEnv = FunEnv(s, gh, tab)
+    def fEnv = FunEnv(s, gh, dh, tab)
   }
 
   protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
@@ -111,10 +113,10 @@ trait CodeGeneration {
     val imports = mkImports(s)
     val globals = mkGlobals(s)
     val tab = mkTable(s)
-    val gh = GlobalsHandler(globals)
-    implicit val funEnv = FunEnv(s, gh, tab)
-    val funs = mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
-    Module("program", imports, globals, tab, funs)
+    Module("program", imports, globals, tab){ (gh, dh) =>
+      implicit val funEnv = FunEnv(s, gh, dh, tab)
+      mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
+    }
   }
 
   final def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
@@ -208,7 +210,15 @@ trait CodeGeneration {
         else I64Const(bvl.toBigInt.toLong)
       case t.BooleanLiteral(value) =>
         I32Const(if (value) 1 else 0)
-
+      case t.StringLiteral(str) =>
+        val length = str.length
+        val mask = 0xFF
+        val l0 = (length | mask).toByte
+        val l1 = ((length >> 8) | mask).toByte
+        val l2 = ((length >> 16) | mask).toByte
+        val l3 = ((length >> 24) | mask).toByte
+        val bytes = l0 +: l1 +: l2 +: l3 +: str
+        I32Const(env.dh.addNext(bytes))
       case t.Record(tpe, fields) =>
         mkRecord(tpe, fields map transform)
       case rs@t.RecordSelector(record, selector) =>

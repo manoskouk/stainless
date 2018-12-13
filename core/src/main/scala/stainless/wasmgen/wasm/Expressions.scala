@@ -97,10 +97,11 @@ object Expressions { self =>
   }
 
   // Constants
-  case class I32Const(value: Int)     extends Expr { val getType = i32 }
-  case class I64Const(value: Long)    extends Expr { val getType = i64 }
-  case class F32Const(value: Float)   extends Expr { val getType = f32 }
-  case class F64Const(value: Double)  extends Expr { val getType = f64 }
+  trait Const extends Expr
+  case class I32Const(value: Int)    extends Expr with Const { val getType = i32 }
+  case class I64Const(value: Long)   extends Expr with Const { val getType = i64 }
+  case class F32Const(value: Float)  extends Expr with Const { val getType = f32 }
+  case class F64Const(value: Double) extends Expr with Const { val getType = f64 }
 
   // Control instructions
   case class If(label: Label, cond: Expr, thenn: Expr, elze: Expr) extends Expr {
@@ -181,7 +182,7 @@ object Expressions { self =>
   }
 
   // Helpers
-  def typeToZero(tpe: Type): Expr = tpe match {
+  def typeToZero(tpe: Type): Const = tpe match {
     case `i32` => I32Const(0)
     case `i64` => I64Const(0)
     case `f32` => F32Const(0)
