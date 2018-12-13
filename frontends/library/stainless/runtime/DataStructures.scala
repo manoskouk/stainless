@@ -1,6 +1,6 @@
 package stainless.runtime
 
-import stainless.lang.error
+import stainless.lang._
 import stainless.annotation.library
 
 /** Implements tuples,
@@ -12,6 +12,67 @@ object DataStructures {
   sealed case class _Tuple2_[T1, T2](e1: T1, e2: T2)
   sealed case class _Tuple3_[T1, T2, T3](e1: T1, e2: T2, e3: T3)
   sealed case class _Tuple4_[T1, T2, T3, T4](e1: T1, e2: T2, e3: T3, e4: T4)
+
+  /* Transforms any type to a string.  Will be filled in by the code generator */
+  @library
+  def _toString_[A](a: A): String = ""
+
+  /* String transformers for basic types */
+	@library
+  def digitToStringL(b: Long): String = {
+    b match {
+      case _ if b == 0 => "0"
+      case _ if b == 1 => "1"
+      case _ if b == 2 => "2"
+      case _ if b == 3 => "3"
+      case _ if b == 4 => "4"
+      case _ if b == 5 => "5"
+      case _ if b == 6 => "6"
+      case _ if b == 7 => "7"
+      case _ if b == 8 => "8"
+      case _ if b == 9 => "9"
+    }
+  }
+
+  @library
+  def digitToStringI(b: Int): String = {
+    b match {
+      case _ if b == 0 => "0"
+      case _ if b == 1 => "1"
+      case _ if b == 2 => "2"
+      case _ if b == 3 => "3"
+      case _ if b == 4 => "4"
+      case _ if b == 5 => "5"
+      case _ if b == 6 => "6"
+      case _ if b == 7 => "7"
+      case _ if b == 8 => "8"
+      case _ if b == 9 => "9"
+    }
+  }
+
+	@library
+  def _i64ToString_(b: Long): String = {
+    if (b < 0) "-" + _i64ToString_(-b)
+    else if (b <= 9) digitToStringL(b)
+    else _i64ToString_(b / 10) + digitToStringL(b % 10)
+  }
+
+	@library
+  def _i32ToString_(b: Int): String = {
+    if (b < 0) "-" + _i32ToString_(-b)
+    else if (b <= 9) digitToStringI(b)
+    else _i32ToString_(b / 10) + digitToStringI(b % 10)
+  }
+
+
+	@library
+	def _booleanToString_(i: Int) = if (i == 0) "false" else "true"
+	@library // TODO
+	def _f64ToString_(b: Real): String = "<real>"
+	@library
+	def _funToString_(): String = "<function>"
+	@library
+	def _arrayToString_(): String = "<array>"
 
   /* compares two elements of any type. Will be filled in by the code generator */
   @library

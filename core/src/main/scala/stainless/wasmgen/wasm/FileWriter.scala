@@ -63,13 +63,13 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |    },
           |
           |    printString: function(arg) {
-          |      var bufView = new Uint32Array(memory.buffer);
+          |      var bufView = new Uint8Array(memory.buffer);
           |      var len = bufView[arg];
           |      var i = 0;
           |      var result = "";
-          |      while(i < len) {
-          |        result += String.fromCharCode(bufView[arg+i+1]);
-          |        i = i + 1
+          |      while(i < 4 * len) {
+          |        result += String.fromCharCode(bufView[arg+i+4]);
+          |        i = i + 4
           |      }
           |      console.log(result);
           |      0;
@@ -79,12 +79,9 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |};
           |
           |loadWebAssembly('$moduleFile', importObject).then(function(instance) {
-          |""".stripMargin ++
-          module.functions.filter(f => toExecute(f.name)).map { f =>
-      s"""|  console.log("${f.name} = " + instance.exports.${f.name}());\n""".stripMargin // FIXME: Add printing for all types to the wasm side
-          }.mkString ++
-       """|}).catch( function(error) {
-          |  console.log("Error in wasm application")
+          |  instance.exports._main_()
+          |}).catch( function(error) {
+          |  console.log("Error in wasm application: " + error)
           |  process.exit(1)
           |})
           |""".stripMargin

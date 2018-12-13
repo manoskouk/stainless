@@ -11,8 +11,6 @@ import Types._
 import Definitions._
 
 trait CodeGeneration {
-  protected type LH = LocalsHandler
-  protected type S  = t.Symbols
   protected case class FunEnv(
     s: t.Symbols,
     gh: GlobalsHandler,
@@ -39,13 +37,35 @@ trait CodeGeneration {
   /** Built-in functions */
   protected val refEqualityName = "_ref_eq_"
   protected val refInequalityName = "_ref_ineq_"
+  protected val refToStringName = "_ref_toString_"
+  protected def toStringName(name: String)(implicit funEnv: FunEnv): String = {
+    val fullName = s"_${name}ToString_"
+    try {
+      funEnv.s.lookup[t.FunDef](fullName).id.uniqueName
+    } catch {
+      case _: t.FunctionLookupException => fullName
+    }
+  }
   protected def arrayCopyName(tpe: Type) = s"_array_copy_${tpe}_"
   protected def mkEquality(s: t.Symbols): FunDef
   protected def mkInequality(s: t.Symbols): FunDef
+  protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
   protected def mkArrayCopy(s: t.Symbols, tpe: Type): FunDef
-  protected def mkBuiltins(s: t.Symbols): Seq[FunDef] = {
-    Seq(mkEquality(s), mkInequality(s)) ++
+  private val mkf32ToString = FunDef("_f32ToString_", Seq(ValDef("arg", f32)), i32) { _ => Unreachable }
+  protected def mkBuiltins(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): Seq[FunDef] = {
+    Seq(mkMain(s, toExecute), mkEquality(s), mkInequality(s), mkToString(s), mkf32ToString) ++
     Seq(i32, i64, f32, f64).map(mkArrayCopy(s, _))
+  }
+  private def mkMain(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): FunDef = {
+    FunDef("_main_", Seq(), i32) { lh =>
+      transform(t.Sequence(
+        toExecute map { fid =>
+          t.Output(
+            t.FunctionInvocation(s.lookup[t.FunDef]("_toString_").id, Seq(),
+              Seq(t.FunctionInvocation(fid, Seq(), Seq()))))
+        }
+      ))(funEnv.env(lh))
+    }
   }
 
   protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr
@@ -93,11 +113,13 @@ trait CodeGeneration {
         "and have to be implemented in a subclass of wasm CodeGeneration")
   }
 
-  final def transform(s: t.Symbols): Module = {
+  final def transform(s: t.Symbols, toExecute: Seq[Identifier]): Module = {
     val imports = mkImports(s)
     val globals = mkGlobals(s)
     val tab = mkTable(s)
-    val funs = mkBuiltins(s) ++ s.functions.values.toList.map(transform(_)(FunEnv(s, GlobalsHandler(globals), tab)))
+    val gh = GlobalsHandler(globals)
+    implicit val funEnv = FunEnv(s, gh, tab)
+    val funs = mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
     Module("program", imports, globals, tab, funs)
   }
 
@@ -129,12 +151,19 @@ trait CodeGeneration {
         ))
       case t.Output(msg) =>
         Call("_printString_", i32, Seq(transform(msg)))
-      case fi@t.FunctionInvocation(id, tps, Seq(lhs, rhs)) if id.name == "_compare_" =>
+      case t.FunctionInvocation(id, _, Seq(lhs, rhs)) if id.name == "_compare_" =>
         // This is hard-coded inequality and not a normal function.
         if (isRefType(lhs.getType))
           Call(refInequalityName, i32, Seq(transform(lhs), transform(rhs)))
         else
           mkBin(sub, lhs, rhs)
+      case t.FunctionInvocation(id, _, Seq(arg)) if id.name == "_toString_" =>
+        if(isRefType(arg.getType))
+          Call(refToStringName, i32, Seq(transform(arg)))
+        else if (arg.getType == t.BooleanType())
+          Call("_booleanToString_", i32, Seq(transform(arg)))
+        else
+          Call(toStringName(transform(arg.getType).toString)(env.fEnv), i32, Seq(transform(arg)))
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
       case t.Sequence(es) =>
@@ -252,4 +281,5 @@ trait CodeGeneration {
         sub(I32Const(1), transform(expr))
     }
   }
+
 }

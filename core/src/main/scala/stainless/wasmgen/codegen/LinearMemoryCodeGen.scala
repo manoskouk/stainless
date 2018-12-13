@@ -56,8 +56,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       boxedEq(i32)("array")(lhs, rhs) /* Array reference equality */ +:
       boxedEq(i32)("function")(lhs, rhs) /* Function reference equality */ +: {
         val sorts = s.records.values.toSeq.collect{ case c: t.ConstructorSort => c }.sortBy(_.typeTag)
-        //sorts.foreach(s => println(s"${s.id.uniqueName} -> ${s.typeTag}"))
-        assert(sorts.head.typeTag == 6)
+        //assert(sorts.head.typeTag == 6)
         sorts map (s => recordEq(s)(lhs, rhs))
       }
     }
@@ -85,14 +84,40 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkInequality(s: t.Symbols): FunDef = {
     implicit val impS = s
     type BinContext = (Expr, Expr) => (Expr, String)
-    def mkSign(e: Expr): Expr = e.getType match {
-      case `i32` => e
-      case `i64` => Wrap(i32, e)
-      case `f32` => Truncate(i32, Signed, copysign(F32Const(1), e))
-      case `f64` => Truncate(i32, Signed, copysign(F64Const(1), e))
+    def mkComp(l: Expr, r: Expr)(implicit lh: LocalsHandler): Expr = l.getType match {
+      case `i32` => sub(l, r)
+      case `i64` => Wrap(i32, sub(l, r))
+      case `f32` => Sequence(Seq(
+        SetLocal("tempf32", sub(l, r)),
+        If(
+          freshLabel("label"),
+          gt(GetLocal("tempf32"), F32Const(0)),
+          I32Const(1),
+          If(
+            freshLabel("label"),
+            lt(GetLocal("tempf32"), F32Const(0)),
+            I32Const(-1),
+            I32Const(0)
+          )
+        )
+      ))
+      case `f64` => Sequence(Seq(
+        SetLocal("tempf64", sub(l, r)),
+        If(
+          freshLabel("label"),
+          gt(GetLocal("tempf64"), F64Const(0)),
+          I32Const(1),
+          If(
+            freshLabel("label"),
+            lt(GetLocal("tempf64"), F64Const(0)),
+            I32Const(-1),
+            I32Const(0)
+          )
+        )
+      ))
     }
-    def boxedIneq(tpe: Type)(name: String = tpe.toString): BinContext = (lhs, rhs) =>
-      (mkSign(sub(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4))))), name)
+    def boxedIneq(tpe: Type, lhs: Expr, rhs: Expr)(name: String = tpe.toString)(implicit lh: LocalsHandler): (Expr, String) =
+      (mkComp(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
 
     def recordIneq(rec: t.RecordSort, lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): (Expr, String) = {
       // We get offsets of all fields except first (typeTag) which we know is equal already
@@ -104,7 +129,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         if(isRefType(fld.getType)) {
           Call(refEqualityName, i32, Seq(l, r))
         } else {
-          mkSign(sub(l, r))
+          mkComp(l, r)
         }
       }
       (fieldIneqs.foldRight(I32Const(0): Expr){ case (e, rest) =>
@@ -116,18 +141,19 @@ object LinearMemoryCodeGen extends CodeGeneration {
     }
 
     def allIneqs(lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): Seq[(Expr, String)] = {
-      boxedIneq(i32)()(lhs, rhs) +: boxedIneq(i64)()(lhs, rhs) +: boxedIneq(f32)()(lhs, rhs) +: boxedIneq(f64)()(lhs, rhs) +:
-        boxedIneq(i32)("array")(lhs, rhs) /* Array reference equality */ +:
-        boxedIneq(i32)("function")(lhs, rhs) /* Function reference equality */ +: {
+      boxedIneq(i32, lhs, rhs)() +: boxedIneq(i64, lhs, rhs)() +: boxedIneq(f32, lhs, rhs)() +: boxedIneq(f64, lhs, rhs)() +:
+        boxedIneq(i32, lhs, rhs)("array") /* Array reference equality */ +:
+        boxedIneq(i32, lhs, rhs)("function") /* Function reference equality */ +: {
         val sorts = s.records.values.toSeq.collect{ case c: t.ConstructorSort => c }.sortBy(_.typeTag)
-        //sorts.foreach(s => println(s"${s.id.uniqueName} -> ${s.typeTag}"))
-        assert(sorts.head.typeTag == 6)
+        //assert(sorts.head.typeTag == 6)
         sorts map (s => recordIneq(s, lhs, rhs, temp))
       }
     }
 
     FunDef(refInequalityName, Seq(ValDef("lhs", i32), ValDef("rhs", i32)), i32) { implicit lh =>
       val temp = lh.getFreshLocal("temp", i32)
+      lh.getFreshLocal("tempf32", f32)
+      lh.getFreshLocal("tempf64", f64)
       Sequence(Seq(
         SetLocal(temp, sub(Load(i32, None, GetLocal("lhs")), Load(i32, None, GetLocal("rhs")))),
         If(
@@ -147,6 +173,36 @@ object LinearMemoryCodeGen extends CodeGeneration {
       ))
     }
   }
+
+
+  protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef = {
+    implicit val impS = s
+    def boxedToString(tpe: Type, arg: Expr): (Expr, String) =
+      (Call(toStringName(tpe.toString), i32, Seq(Load(tpe, None, add(arg, I32Const(4))))), tpe.toString)
+
+    def recordToString(rec: t.ConstructorSort, arg: Expr): (Expr, String) = {
+      (Call(toStringName(rec.id.uniqueName), i32, Seq(arg)), rec.id.uniqueName)
+    }
+
+    val allToStrings: Expr => Seq[(Expr, String)] = arg => {
+      boxedToString(i32, arg) +: boxedToString(i64, arg) +: boxedToString(f32, arg) +: boxedToString(f64, arg) +:
+        (Call(toStringName("array"), i32, Seq()), "array") +:
+        (Call(toStringName("fun"), i32, Seq()), "function") +: {
+        val sorts = s.records.values.toSeq.collect{ case c: t.ConstructorSort => c }.sortBy(_.typeTag)
+        sorts map (s => recordToString(s, arg))
+      }
+    }
+
+    FunDef(refToStringName, Seq(ValDef("arg", i32)), i32) { implicit lh =>
+      val toStrings = allToStrings(GetLocal("arg"))
+      // We use i32 as default, whatever, should not happen
+      val jump = Br_Table(toStrings.map(_._2), toStrings.head._2, Load(i32, None, GetLocal("arg")), None)
+      toStrings.foldLeft(jump: Expr) { case (first, (toS, label)) =>
+        Sequence(Seq(Block(label, first), Return(toS)))
+      }
+    }
+  }
+
 
   protected def mkArrayCopy(s: t.Symbols, tpe: Type): FunDef = {
     FunDef(
@@ -224,9 +280,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr = {
     implicit val lh = env.lh
     implicit val s = env.s
-    val t.RecordType(id) = subType
     val temp = lh.getFreshLocal(freshLabel("cast"), i32)
-    s.getRecord(id) match {
+    subType.getRecord match {
       case cs: t.ConstructorSort =>
         Sequence(Seq(
           SetLocal(temp, expr),
@@ -237,7 +292,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Unreachable
           )
         ))
-      case rs: t.RecordSort =>
+      /*case rs: t.RecordSort =>
         val tags = s.records.collect{ case (_, cs: t.ConstructorSort) if cs.parent contains id  => cs.typeTag }
         if (tags.isEmpty) I32Const(0)
         else {
@@ -251,9 +306,9 @@ object LinearMemoryCodeGen extends CodeGeneration {
             )
           ))
 
-        }
+        }*/
 
-      case _ => expr // Our translation ensures by construction that we cannot fail when casting closures
+      case _ => expr // Our translation ensures by construction that we cannot fail when casting anything else
     }
   }
   // Up-casts are trivial
@@ -311,12 +366,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
 
-
-
-
   override def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
-    case t.ArrayType(_) => i32
-    case t.RecordType(_) => i32
+    case t.ArrayType(_) | t.RecordType(_) => i32
     case _ => super.transform(tpe)
   }
 }

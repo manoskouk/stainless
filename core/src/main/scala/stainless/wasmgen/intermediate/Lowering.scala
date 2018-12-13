@@ -625,9 +625,31 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
     parent +: children
   }
 
-  def transform(syms: s.Symbols): t.Symbols = {
+  private def mkToString(constr: s.ADTConstructor)(implicit sym: s.Symbols): s.FunDef = {
+    import s._
+    val dsl = new inox.ast.DSL { val trees = s }
+    val sort = sym.sorts(constr.sort)
+    dsl.mkFunDef(FreshIdentifier("_" + constr.id.uniqueName + "ToString_"))(sort.tparams.map(_.id.name): _*){ tps =>
+      (Seq(ValDef(FreshIdentifier("v"), ADTType(sort.id, tps))), StringType(), {
+        case Seq(arg) =>
+          (
+            StringLiteral(constr.id.name + "(") +:
+            constr.typed(tps).fields.flatMap(f => Seq(
+              FunctionInvocation(fun("_toString_").id, Seq(f.getType), Seq(ADTSelector(arg, f.id))),
+              StringLiteral(", "))
+            ) :+
+            StringLiteral(")")
+          ).reduceLeft(StringConcat)
+      })
+    }
+  }
 
-    // (0) Make tuple sorts
+  def transform(syms0: s.Symbols): t.Symbols = {
+
+    // (0) Make toString's
+    val toStrings = syms0.sorts.toSeq.flatMap(_._2.constructors).map(mkToString(_)(syms0))
+    val syms = syms0.withFunctions(toStrings)
+    toStrings.foreach(fn => println(syms.explainTyping(fn.fullBody)(s.PrinterOptions())))
     val manager = new SymbolsManager
     val env0 = (syms, manager)
 
@@ -644,8 +666,8 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    //ret.records foreach (r => println(r._2.asString))
-    //ret.functions foreach (r => println(r._2.asString))
+    ret.records foreach (r => println(r._2.asString))
+    ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 
