@@ -71,10 +71,12 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
-  /** Execute all expressions in 'es' one after the other */
+  /** Execute all expressions in 'es' one after the other. All but the last have to be unit */
   sealed case class Sequence(es: Seq[Expr]) extends Expr {
     require(es.nonEmpty)
-    def getType(implicit s: Symbols) = es.last.getType
+    def getType(implicit s: Symbols) = {
+      checkParamTypes(es.init, List.fill(es.size - 1)(UnitType()), es.last.getType)
+    }
   }
 
   sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {

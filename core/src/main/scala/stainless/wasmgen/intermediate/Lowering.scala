@@ -22,7 +22,6 @@ trait Transformer extends stainless.transformers.Transformer {
     import t._
     tp match {
       case s.Untyped => Untyped
-      case s.UnitType() => Int32Type()
       case s.CharType() => Int32Type()
       case s.IntegerType() => Int64Type() // TODO: Implement big integers properly
       case s.StringType() => ArrayType(Int32Type())
@@ -153,8 +152,6 @@ private [wasmgen] class ExprTransformer (
     implicit val impSyms = env._1
     e match {
       // Literals
-      case s.UnitLiteral() =>
-        Int32Literal(0)
       case s.CharLiteral(value) =>
         Int32Literal(value)
       case s.IntegerLiteral(value) =>
@@ -378,7 +375,7 @@ private [wasmgen] class ExprTransformer (
         val strV = Variable.fresh("strConst", StrType)
         Let(strV.toVal, NewArray(Int32Literal(str.length), Int32Type(), None),
           Sequence(str.zipWithIndex.map{
-            case (ch, index) => ArraySet(strV, Int32Literal(index), Int32Literal(ch.toInt/c0))
+            case (ch, index) => ArraySet(strV, Int32Literal(index), Int32Literal(ch.toInt))
           } :+ strV)
         )
       case s.StringConcat(lhs, rhs) =>

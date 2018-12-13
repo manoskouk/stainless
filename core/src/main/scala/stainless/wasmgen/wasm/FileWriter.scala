@@ -72,7 +72,6 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |        i = i + 4
           |      }
           |      console.log(result);
-          |      0;
           |    }
           |
           |  }

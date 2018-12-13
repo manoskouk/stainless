@@ -30,7 +30,7 @@ trait CodeGeneration {
   protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
 
   protected def mkImports(symbols: t.Symbols): Seq[Import] = {
-    Seq(Import("system", "printString", FunSig("_printString_", Seq(i32), i32)))
+    Seq(Import("system", "printString", FunSig("_printString_", Seq(i32), void)))
   }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   protected def mkTable(s: t.Symbols): Table
@@ -57,7 +57,7 @@ trait CodeGeneration {
     Seq(i32, i64, f32, f64).map(mkArrayCopy(s, _))
   }
   private def mkMain(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): FunDef = {
-    FunDef("_main_", Seq(), i32) { lh =>
+    FunDef("_main_", Seq(), void) { lh =>
       transform(t.Sequence(
         toExecute map { fid =>
           t.Output(
@@ -98,6 +98,7 @@ trait CodeGeneration {
   }
 
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
+    case t.UnitType() => void
     case t.BooleanType() => i32
     case t.RealType() => f64
     case t.BVType(_, size) => if (size == 64) i64 else i32
@@ -178,7 +179,7 @@ trait CodeGeneration {
           transform(body)
         ))
       case t.Output(msg) =>
-        Call("_printString_", i32, Seq(transform(msg)))
+        Call("_printString_", void, Seq(transform(msg)))
       case t.FunctionInvocation(id, _, Seq(lhs, rhs)) if id.name == "_compare_" =>
         surfaceIneq(transform(lhs), transform(rhs), lhs.getType)
       case t.FunctionInvocation(id, _, Seq(arg)) if id.name == "_toString_" =>
@@ -186,7 +187,7 @@ trait CodeGeneration {
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
       case t.Sequence(es) =>
-        Sequence ( es.init.map(e => Drop(transform(e))) :+ transform(es.last) )
+        Sequence ( es map transform )
 
       case t.IfExpr(cond, thenn, elze) =>
         If(
@@ -200,6 +201,8 @@ trait CodeGeneration {
         // but we have to invoke the reference equaliry implementation for ref. types
         surfaceEq(transform(lhs), transform(rhs), lhs.getType)
 
+      case t.UnitLiteral() =>
+        Nop
       case bvl@t.BVLiteral(signed, value, size) =>
         if (size <= 32) I32Const(bvl.toBigInt.toInt)
         else I64Const(bvl.toBigInt.toLong)
@@ -237,7 +240,7 @@ trait CodeGeneration {
       case t.ArrayCopy(from, to, startFrom, startTo, length) =>
         val t.ArrayType(tpe) = from.getType
         val trTpe = transform(tpe)
-        Call(arrayCopyName(trTpe), i32, Seq(from, to, startFrom, startTo, length) map transform)
+        Call(arrayCopyName(trTpe), void, Seq(from, to, startFrom, startTo, length) map transform)
 
       case t.Plus(lhs, rhs) =>
         mkBin(add, lhs, rhs)

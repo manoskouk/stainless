@@ -200,7 +200,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     FunDef(
       arrayCopyName(tpe),
       Seq("from", "to", "startFrom", "startTo", "length").map(ValDef(_, i32)),
-      i32
+      void
     ) { implicit lh =>
       val index = lh.getFreshLocal(freshLabel("index"), i32)
       val loop = freshLabel("loop")
@@ -225,8 +225,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             )),
             Nop
           )
-        ),
-        I32Const(0) // Unit literal
+        )
       ))
     }
   }
@@ -346,14 +345,11 @@ object LinearMemoryCodeGen extends CodeGeneration {
   }
 
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr = {
-    Sequence(Seq(
-      Store(
-        None,
-        add(array, add(I32Const(4), mul(index, I32Const(value.getType.size)))),
-        value
-      ),
-      I32Const(0) // Unit literal
-    ))
+    Store(
+      None,
+      add(array, add(I32Const(4), mul(index, I32Const(value.getType.size)))),
+      value
+    )
   }
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)
