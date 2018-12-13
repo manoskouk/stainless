@@ -40,11 +40,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         val wasmTpe = transform(fld.getType)
         val l = Load(wasmTpe, None, add(lhs, I32Const(off)))
         val r = Load(wasmTpe, None, add(rhs, I32Const(off)))
-        if(isRefType(fld.getType)) {
-          Call(refEqualityName, i32, Seq(l, r))
-        } else {
-          EQ(l, r)
-        }
+        surfaceEq(l, r, fld.getType)
       }
       (fieldEqs.foldRight(I32Const(1): Expr){ case (e, rest) =>
         If(freshLabel("label"), e, rest, I32Const(0))
@@ -126,11 +122,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         val wasmTpe = transform(fld.getType)
         val l = Load(wasmTpe, None, add(lhs, I32Const(off)))
         val r = Load(wasmTpe, None, add(rhs, I32Const(off)))
-        if(isRefType(fld.getType)) {
-          Call(refEqualityName, i32, Seq(l, r))
-        } else {
-          mkComp(l, r)
-        }
+        surfaceIneq(l, r, fld.getType)
       }
       (fieldIneqs.foldRight(I32Const(0): Expr){ case (e, rest) =>
         Sequence(Seq(

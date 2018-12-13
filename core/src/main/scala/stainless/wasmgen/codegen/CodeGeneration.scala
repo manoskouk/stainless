@@ -97,13 +97,6 @@ trait CodeGeneration {
     op(transform(lhs), transform(rhs))
   }
 
-  protected def isRefType(tpe: t.Type): Boolean = tpe match {
-    case t.BVType(_, _) | t.RealType() | t.BooleanType() =>
-      false
-    case t.RecordType(_) | t.ArrayType(_) =>
-      true
-  }
-
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
     case t.BooleanType() => i32
     case t.RealType() => f64
@@ -134,6 +127,41 @@ trait CodeGeneration {
     }
   }
 
+  final protected def surfaceEq(lhs: Expr, rhs: Expr, tpe: t.Type): Expr = {
+    tpe match {
+      case t.RecordType(_) =>
+        Call(refEqualityName, i32, Seq(lhs, rhs))
+      case _ =>
+        EQ(lhs, rhs)
+    }
+  }
+  final protected def surfaceIneq(lhs: Expr, rhs: Expr, tpe: t.Type): Expr = {
+    tpe match {
+      case t.RecordType(_) =>
+        Call(refInequalityName, i32, Seq(lhs, rhs))
+      case t.RealType() =>
+        Truncate(i32, Signed, sub(lhs, rhs)) // FIXME!!!
+      case t.BVType(_, 64) =>
+        Wrap(i32, sub(lhs, rhs))
+      case _ =>
+        sub(lhs, rhs)
+    }
+  }
+  final protected def surfaceToString(arg: Expr, tpe: t.Type)(implicit funEnv: FunEnv): Expr = {
+    tpe match {
+      case t.RecordType(_) =>
+        Call(refToStringName, i32, Seq(arg))
+      case t.BooleanType() =>
+        Call(toStringName("boolean"), i32, Seq(arg))
+      case t.ArrayType(t.Int32Type()) =>
+        arg
+      case t.ArrayType(_) =>
+        Call(toStringName("array"), i32, Seq(arg))
+      case _ =>
+        Call(toStringName(arg.getType.toString), i32, Seq(arg))
+    }
+  }
+
   final def transform(expr: t.Expr)(implicit env: Env): Expr = {
     implicit val lh = env.lh
     implicit val s  = env.s
@@ -152,18 +180,9 @@ trait CodeGeneration {
       case t.Output(msg) =>
         Call("_printString_", i32, Seq(transform(msg)))
       case t.FunctionInvocation(id, _, Seq(lhs, rhs)) if id.name == "_compare_" =>
-        // This is hard-coded inequality and not a normal function.
-        if (isRefType(lhs.getType))
-          Call(refInequalityName, i32, Seq(transform(lhs), transform(rhs)))
-        else
-          mkBin(sub, lhs, rhs)
+        surfaceIneq(transform(lhs), transform(rhs), lhs.getType)
       case t.FunctionInvocation(id, _, Seq(arg)) if id.name == "_toString_" =>
-        if(isRefType(arg.getType))
-          Call(refToStringName, i32, Seq(transform(arg)))
-        else if (arg.getType == t.BooleanType())
-          Call("_booleanToString_", i32, Seq(transform(arg)))
-        else
-          Call(toStringName(transform(arg.getType).toString)(env.fEnv), i32, Seq(transform(arg)))
+        surfaceToString(transform(arg), arg.getType)(env.fEnv)
       case fi@t.FunctionInvocation(id, tps, args) =>
         Call(id.uniqueName, transform(fi.getType), args map transform)
       case t.Sequence(es) =>
@@ -179,10 +198,7 @@ trait CodeGeneration {
       case t.Equals(lhs, rhs) =>
         // Equality is value equality for non-reference types,
         // but we have to invoke the reference equaliry implementation for ref. types
-        if (isRefType(lhs.getType))
-          Call(refEqualityName, i32, Seq(transform(lhs), transform(rhs)))
-        else
-          mkBin(EQ, lhs, rhs)
+        surfaceEq(transform(lhs), transform(rhs), lhs.getType)
 
       case bvl@t.BVLiteral(signed, value, size) =>
         if (size <= 32) I32Const(bvl.toBigInt.toInt)
