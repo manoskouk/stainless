@@ -35,6 +35,7 @@ trait CodeGeneration {
     Seq(Import("system", "printString", FunSig("_printString_", Seq(i32), void)))
   }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
+  protected def updateGlobals(env: FunEnv): Unit
   protected def mkTable(s: t.Symbols): Table
   /** Built-in functions */
   protected val refEqualityName = "_ref_eq_"
@@ -115,7 +116,9 @@ trait CodeGeneration {
     val tab = mkTable(s)
     Module("program", imports, globals, tab){ (gh, dh) =>
       implicit val funEnv = FunEnv(s, gh, dh, tab)
-      mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
+      val funs = mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
+      updateGlobals(funEnv)
+      funs
     }
   }
 
@@ -213,12 +216,13 @@ trait CodeGeneration {
       case t.StringLiteral(str) =>
         val length = str.length
         val mask = 0xFF
-        val l0 = (length | mask).toByte
-        val l1 = ((length >> 8) | mask).toByte
-        val l2 = ((length >> 16) | mask).toByte
-        val l3 = ((length >> 24) | mask).toByte
-        val bytes = l0 +: l1 +: l2 +: l3 +: str
-        I32Const(env.dh.addNext(bytes))
+        val l0 = (length & mask).toByte
+        val l1 = ((length >> 8) & mask).toByte
+        val l2 = ((length >> 16) & mask).toByte
+        val l3 = ((length >> 24) & mask).toByte
+        val lbytes = Seq(l0, l1, l2, l3)
+        val content = str.flatMap(char => Seq(char, 0, 0, 0).map(_.toByte))
+        I32Const(env.dh.addNext(lbytes ++ content))
       case t.Record(tpe, fields) =>
         mkRecord(tpe, fields map transform)
       case rs@t.RecordSelector(record, selector) =>

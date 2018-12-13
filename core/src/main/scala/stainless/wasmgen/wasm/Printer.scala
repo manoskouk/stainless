@@ -29,8 +29,11 @@ object Printer {
   }
 
   private def doc(data: Data): Document = {
-    def printByte(b: Byte): String = if (b)
-    s"""(data (offset (i32.const ${data.offset}) "${data.bytes}")"""
+    def formatByte(b: Byte) = {
+      if (b >= 20 && b != 0x7F && b != '"' && b != '\\') b.toChar.toString
+      else "\\%02X" format b
+    }
+    s"""(data (offset (i32.const ${data.offset})) "${data.bytes.map(formatByte).mkString}")"""
   }
 
   private def doc(t: Table): Document = {

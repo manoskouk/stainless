@@ -40,5 +40,6 @@ class DataHandler(init: Int) {
     current
   }
   def data = data_
+  def nextFree = offset
 }
 

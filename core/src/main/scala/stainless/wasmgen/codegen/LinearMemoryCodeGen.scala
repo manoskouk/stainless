@@ -23,6 +23,9 @@ object LinearMemoryCodeGen extends CodeGeneration {
   ) ++ super.mkImports(s)
 
   protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
+  protected def updateGlobals(funEnv: FunEnv): Unit = {
+    funEnv.gh.update(memB, I32Const(funEnv.dh.nextFree))
+  }
   protected def mkTable(s: t.Symbols) = Table(
     s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
   )
