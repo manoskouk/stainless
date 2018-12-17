@@ -68,9 +68,11 @@ trait CodeGeneration {
     FunDef("_main_", Seq(), void) { lh =>
       transform(t.Sequence(
         toExecute map { fid =>
-          t.Output(
+          t.Output(t.StringConcat(
+            t.StringLiteral(s"${fid.name} = "),
             t.FunctionInvocation(s.lookup[t.FunDef]("_toString_").id, Seq(),
-              Seq(t.FunctionInvocation(fid, Seq(), Seq()))))
+              Seq(t.FunctionInvocation(fid, Seq(), Seq())))
+          ))
         }
       ))(funEnv.env(lh))
     }
