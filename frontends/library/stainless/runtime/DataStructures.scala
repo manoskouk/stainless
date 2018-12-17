@@ -240,17 +240,21 @@ object DataStructures {
   @library
   def __MNil_$0ToString_[K, V](s: _Map_[K, V]) = {
     val _MNil_(default) = s
-    "Map().withDefaultValue(" + _toString_(default) + ")"
+    "Map()"
   }
   @library 
   def __MCons_$0ToString_[K, V](s: _Map_[K, V]) = {
+    def vToString(v: V) = {
+      val s = _toString_(v)
+      s.bigSubstring(BigInt(5), s.bigLength - 1)
+    }
     def rec(s: _Map_[K, V]): String = s match {
       case _MCons_(k1, v1, m1@ _MCons_(_, _, _)) =>
-        _toString_(k1) + " -> " + _toString_(v1) + ", " + rec(m1)
+        _toString_(k1) + " -> " + vToString(v1) + ", " + rec(m1)
       case _MCons_(k1, v1, _MNil_(default)) =>
-        _toString_(k1) + " -> " + _toString_(v1) + ").withDefaultValue(" + _toString_(default) + ")"
+        _toString_(k1) + " -> " + vToString(v1)
     }
-    "Map(" + rec(s)
+    "Map(" + rec(s) + ")"
   }
 
   @library
