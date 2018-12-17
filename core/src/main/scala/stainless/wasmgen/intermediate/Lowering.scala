@@ -318,7 +318,7 @@ private [wasmgen] class ExprTransformer (
       case s.FunctionInvocation(id, tps, args) =>
         val formals = sym0.functions(id).params.map(_.getType)
         maybeUnbox(
-          t.FunctionInvocation(id, Seq(),
+          FunctionInvocation(id, Seq(),
             args zip formals map { case (arg, formal) =>
               maybeBox(arg, transform(formal, env), env)
             }
@@ -352,14 +352,14 @@ private [wasmgen] class ExprTransformer (
         // TODO: Copy functional arrays or analyze when we don't need to do so
         val arr = Variable.fresh("array", ArrayType(trBase))
         Let(arr.toVal, transform(array, env),
-          t.Sequence(Seq(
-            t.ArraySet(arr, transform(index, env), maybeBox(value, trBase, env)),
+          Sequence(Seq(
+            ArraySet(arr, transform(index, env), maybeBox(value, trBase, env)),
             arr
           ) ) )
       case s.ArraySelect(array, index) =>
         val ArrayType(trBase) = transform(array.getType, env)
         maybeUnbox(
-          t.ArraySelect(transform(array, env), transform(index, env)),
+          ArraySelect(transform(array, env), transform(index, env)),
           trBase,
           transform(e.getType, env),
           env
@@ -377,7 +377,7 @@ private [wasmgen] class ExprTransformer (
         val constr = sort(s"_Tuple${size}_").constructors.head
         val selector = constr.fields(index - 1).id
         maybeUnbox(
-          t.RecordSelector(t.CastDown(transform(tuple, env), RecordType(constr.id)), selector),
+          RecordSelector(CastDown(transform(tuple, env), RecordType(constr.id)), selector),
           AnyRefType,
           transform(e.getType, env),
           env
