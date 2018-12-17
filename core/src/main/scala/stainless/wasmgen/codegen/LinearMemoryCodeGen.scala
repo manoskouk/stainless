@@ -331,7 +331,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
   // Up-casts are trivial
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr = expr
 
-  protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit env: Env): Expr = {
+  protected def mkNewArray(length: Expr, init: Option[Expr])(implicit env: Env): Expr = {
     implicit val lh = env.lh
     implicit val gh = env.gh
     val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
@@ -339,7 +339,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     val ind = lh.getFreshLocal(freshLabel("index"), i32)
     val loop = freshLabel("loop")
 
-    def indToPtr(e: Expr) = elemAddr(GetLocal(memCache), e, base)
+    def indToPtr(e: Expr) = elemAddr(GetLocal(memCache), e, i32)
 
     Sequence(Seq(
       SetLocal(memCache, getMem),
@@ -349,7 +349,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       SetLocal(ind, I32Const(0))
     ) ++ (init match {
       case Some(elem) =>
-        val initL = lh.getFreshLocal(freshLabel("init"), base)
+        val initL = lh.getFreshLocal(freshLabel("init"), i32)
         Seq(
           SetLocal(initL, elem),
           Block(loop, Sequence(Seq(

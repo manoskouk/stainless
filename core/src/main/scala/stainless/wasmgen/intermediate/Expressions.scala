@@ -79,9 +79,9 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
-  sealed case class NewArray(length: Expr, base: Type, init: Option[Expr]) extends Expr {
+  sealed case class NewArray(length: Expr, init: Option[Expr]) extends Expr {
     def getType(implicit s: Symbols) =
-      if (length.getType == Int32Type() && init.forall(_.getType == base)) ArrayType(base)
+      if (length.getType == Int32Type()) ArrayType(AnyRefType)
       else Untyped
   }
 

@@ -175,7 +175,7 @@ trait CodeGeneration {
   protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr
-  protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit env: Env): Expr
+  protected def mkNewArray(length: Expr, init: Option[Expr])(implicit env: Env): Expr
   protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
@@ -282,8 +282,8 @@ trait CodeGeneration {
       case t.CastUp(e, supertype) =>
         mkCastUp(transform(e), supertype)
 
-      case t.NewArray(length, base, init) =>
-        mkNewArray(transform(length), transform(base), init map transform)
+      case t.NewArray(length, init) =>
+        mkNewArray(transform(length), init map transform)
       case ag@t.ArraySelect(array, index) =>
         mkArrayGet(transform(array), transform(ag.getType), transform(index))
       case t.ArraySet(array, index, value) =>

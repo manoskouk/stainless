@@ -27,7 +27,7 @@ trait Printer extends stainless.ast.Printer {
 
     case Output(msg) => p"println($msg)"
 
-    case NewArray(length, base, init) => p"new Array[$base]($length){ ${init.getOrElse("")} }"
+    case NewArray(length, init) => p"new Array($length){ ${init.getOrElse("")} }"
 
     case ArraySet(array, index, value) =>
       p"$array($index) = $value"

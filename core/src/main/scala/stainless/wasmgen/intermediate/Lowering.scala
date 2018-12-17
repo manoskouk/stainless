@@ -18,7 +18,6 @@ trait Transformer extends stainless.transformers.Transformer {
     implicit val impSyms = env._1
     import t._
     tp match {
-      case s.Untyped => Untyped
       case s.CharType() => Int32Type()
       case s.IntegerType() => Int64Type() // TODO: Implement big integers properly
 
@@ -45,9 +44,11 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.TypeParameter(id, flags) => // Type erasure
         RecordType(AnyRefSort.id)
 
+      case s.ArrayType(base) =>
+        t.ArrayType(AnyRefType)
       // These remain the same
+      // case s.Untyped =>
       // case s.RealType() => TODO: Represent Reals properly
-      // case s.ArrayType(base) =>
       // case s.BVType(signed, size) =>
 
       case _ => super.transform(tp, env)
@@ -330,37 +331,33 @@ private [wasmgen] class ExprTransformer (
 
       // Arrays
       case s.FiniteArray(elems, base) =>
-        val trBase = transform(base, env)
-        val arr = Variable.fresh("array", ArrayType(trBase))
+        val arr = Variable.fresh("array", ArrayType(AnyRefType))
         Let(arr.toVal,
-          NewArray(Int32Literal(elems.length), transform(base, env), None),
+          NewArray(Int32Literal(elems.length), None),
           Sequence(elems.zipWithIndex.map { case (elem, index) =>
-            ArraySet(arr, Int32Literal(index), maybeBox(elem, trBase, env))
+            ArraySet(arr, Int32Literal(index), maybeBox(elem, AnyRefType, env))
           } :+ arr)
         )
       case s.LargeArray(elems, default, size, base) =>
-        val trBase = transform(base, env)
-        val arr = Variable.fresh("array", ArrayType(trBase))
+        val arr = Variable.fresh("array", ArrayType(AnyRefType))
         Let(arr.toVal,
-          NewArray(transform(size, env), transform(base, env), Some( transform(default, env))),
+          NewArray(transform(size, env), Some(transform(default, env))),
           Sequence( elems.toSeq.sortBy(_._1).map { case (index, elem) =>
-            ArraySet(arr, Int32Literal(index), maybeBox(elem, trBase, env))
+            ArraySet(arr, Int32Literal(index), maybeBox(elem, AnyRefType, env))
           } :+ arr)
         )
       case s.ArrayUpdated(array, index, value) =>
-        val ArrayType(trBase) = transform(array.getType, env)
         // TODO: Copy functional arrays or analyze when we don't need to do so
-        val arr = Variable.fresh("array", ArrayType(trBase))
+        val arr = Variable.fresh("array", ArrayType(AnyRefType))
         Let(arr.toVal, transform(array, env),
           Sequence(Seq(
-            ArraySet(arr, transform(index, env), maybeBox(value, trBase, env)),
+            ArraySet(arr, transform(index, env), maybeBox(value, AnyRefType, env)),
             arr
           ) ) )
       case s.ArraySelect(array, index) =>
-        val ArrayType(trBase) = transform(array.getType, env)
         maybeUnbox(
           ArraySelect(transform(array, env), transform(index, env)),
-          trBase,
+          AnyRefType,
           transform(e.getType, env),
           env
         )
