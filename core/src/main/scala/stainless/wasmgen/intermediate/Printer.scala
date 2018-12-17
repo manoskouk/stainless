@@ -29,9 +29,6 @@ trait Printer extends stainless.ast.Printer {
 
     case NewArray(length, base, init) => p"new Array[$base]($length){ ${init.getOrElse("")} }"
 
-    case ArrayCopy(from, to, startFrom, startTo, length) =>
-      p"Array.copy($from, $to, $startFrom, $startTo, $length)"
-
     case ArraySet(array, index, value) =>
       p"$array($index) = $value"
 

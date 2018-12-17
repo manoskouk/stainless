@@ -100,6 +100,7 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     case BVType(_, 64) => 1
     case RealType() => 3
     case ArrayType(_) => 4
+    case StringType() => 4
     case FunctionType(_, _) => 5
   }
 

@@ -24,7 +24,6 @@ trait Transformer extends stainless.transformers.Transformer {
       case s.Untyped => Untyped
       case s.CharType() => Int32Type()
       case s.IntegerType() => Int64Type() // TODO: Implement big integers properly
-      case s.StringType() => ArrayType(Int32Type())
 
       case s.ADTType(id, tps) =>
         RecordType(id)
@@ -102,7 +101,6 @@ private [wasmgen] class ExprTransformer (
   initSorts: Map[Identifier, trees.RecordSort]
 ) extends Transformer {
   import t._
-  private val StrType = ArrayType(Int32Type())
   def initEnv = (sym0, manager)
 
   private def isRecordType(tpe: t.Type) = tpe match {
@@ -370,36 +368,6 @@ private [wasmgen] class ExprTransformer (
           env
         )
 
-      case s.StringConcat(lhs, rhs) =>
-        val l = Variable.fresh("lhs", StrType)
-        val r = Variable.fresh("rhs", StrType)
-        val newArray = Variable.fresh("arr", StrType)
-        Let(l.toVal, transform(lhs, env),
-          Let(r.toVal, transform(rhs, env),
-            Let(
-              newArray.toVal,
-              NewArray(Plus(ArrayLength(l), ArrayLength(r)), Int32Type(), None),
-              Sequence(Seq(
-                ArrayCopy(l, newArray, Int32Literal(0), Int32Literal(0), ArrayLength(l)),
-                ArrayCopy(r, newArray, Int32Literal(0), ArrayLength(l), ArrayLength(r)),
-                newArray
-              ))
-            )))
-      case s.SubString(expr, start, end) =>
-        val startV = Variable.fresh("start", Int32Type())
-        val endV = Variable.fresh("end", Int32Type())
-        Let(startV.toVal, transform(start, env),
-          Let(endV.toVal, transform(end, env),
-            ArrayCopy(
-              transform(expr, env),
-              NewArray(Minus(endV, startV), Int32Type(), None),
-              startV,
-              Int32Literal(0),
-              Minus(endV, startV) ) ))
-
-      case s.StringLength(expr) =>
-        ArrayLength(transform(expr, env))
-
       // Tuples
       case s.Tuple(exprs) =>
         transform(s.ADT(
@@ -544,6 +512,7 @@ private [wasmgen] class ExprTransformer (
 
       // These should all be the same:
       // ** All other literals **
+      // ** String operations **
       // case s.Variable(id, tpe, flags) =>
       // case s.Let(vd, value, body) =>
       // case s.NoTree(tpe) =>
@@ -577,7 +546,6 @@ private [wasmgen] class ExprTransformer (
 /** Lowers stainless trees to the language defined in [[stainless.wasmgen.intermediate]]
   *
   * The following changes take place:
-  * - Strings become arrays of chars
   * - Arrays become mutable
   * - Chars, Booleans and Unit become i32
   * - BigInts become i64 (Currently, will be fixed in the future) (this is done later in the pipeline)
@@ -621,12 +589,15 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
     dsl.mkFunDef(FreshIdentifier("_" + constr.id.uniqueName + "ToString_"))(sort.tparams.map(_.id.name): _*){ tps =>
       (Seq(ValDef(FreshIdentifier("v"), ADTType(sort.id, tps))), StringType(), {
         case Seq(arg) =>
+          val fields = constr.typed(tps).fields
+          val name = if (sort.id.name matches "_Tuple\\d{1,2}_") "" else constr.id.name
           (
-            StringLiteral(constr.id.name + "(") +:
-            constr.typed(tps).fields.flatMap(f => Seq(
-              FunctionInvocation(fun("_toString_").id, Seq(f.getType), Seq(ADTSelector(arg, f.id))),
-              StringLiteral(", "))
-            ) :+
+            StringLiteral(name + "(") +:
+            fields.zipWithIndex.flatMap { case (f, ind) =>
+              val fieldStr = FunctionInvocation(fun("_toString_").id, Seq(f.getType), Seq(ADTSelector(arg, f.id)))
+              if (ind == fields.size - 1) Seq(fieldStr)
+              else Seq(fieldStr, StringLiteral(", "))
+            } :+
             StringLiteral(")")
           ).reduceLeft(StringConcat)
       })

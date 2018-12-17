@@ -38,6 +38,8 @@ trait CodeGeneration {
   protected def updateGlobals(env: FunEnv): Unit
   protected def mkTable(s: t.Symbols): Table
   /** Built-in functions */
+  protected val stringConcatName = "_string_concat_"
+  protected val substringName = "_substring_"
   protected val refEqualityName = "_ref_eq_"
   protected val refInequalityName = "_ref_ineq_"
   protected val refToStringName = "_ref_toString_"
@@ -53,11 +55,11 @@ trait CodeGeneration {
   protected def mkEquality(s: t.Symbols): FunDef
   protected def mkInequality(s: t.Symbols): FunDef
   protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
-  protected def mkArrayCopy(s: t.Symbols, tpe: Type): FunDef
+  protected def mkStringConcat(implicit funEnv: FunEnv): FunDef
+  protected def mkSubstring(implicit funEnv: FunEnv): FunDef
   private val mkf32ToString = FunDef("_f32ToString_", Seq(ValDef("arg", f32)), i32) { _ => Unreachable }
   protected def mkBuiltins(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): Seq[FunDef] = {
-    Seq(mkMain(s, toExecute), mkEquality(s), mkInequality(s), mkToString(s), mkf32ToString) ++
-    Seq(i32, i64, f32, f64).map(mkArrayCopy(s, _))
+    Seq(mkMain(s, toExecute), mkEquality(s), mkInequality(s), mkToString(s), mkf32ToString, mkStringConcat, mkSubstring)
   }
   private def mkMain(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): FunDef = {
     FunDef("_main_", Seq(), void) { lh =>
@@ -105,7 +107,7 @@ trait CodeGeneration {
     case t.BooleanType() => i32
     case t.RealType() => f64
     case t.BVType(_, size) => if (size == 64) i64 else i32
-    case t.ArrayType(_) | t.RecordType(_) =>
+    case t.ArrayType(_) | t.RecordType(_) | t.StringType() =>
       sys.error("Reference types are left abstract " +
         "and have to be implemented in a subclass of wasm CodeGeneration")
   }
@@ -159,7 +161,7 @@ trait CodeGeneration {
         Call(refToStringName, i32, Seq(arg))
       case t.BooleanType() =>
         Call(toStringName("boolean"), i32, Seq(arg))
-      case t.ArrayType(t.Int32Type()) =>
+      case t.StringType() =>
         arg
       case t.ArrayType(_) =>
         Call(toStringName("array"), i32, Seq(arg))
@@ -251,10 +253,13 @@ trait CodeGeneration {
         mkArraySet(transform(array), transform(index), transform(value))
       case t.ArrayLength(array) =>
         mkArrayLength(transform(array))
-      case t.ArrayCopy(from, to, startFrom, startTo, length) =>
-        val t.ArrayType(tpe) = from.getType
-        val trTpe = transform(tpe)
-        Call(arrayCopyName(trTpe), void, Seq(from, to, startFrom, startTo, length) map transform)
+
+      case t.StringLength(expr) =>
+        mkArrayLength(transform(expr))
+      case t.StringConcat(lhs, rhs) =>
+        Call(stringConcatName, i32, Seq(transform(lhs), transform(rhs)))
+      case t.SubString(expr, start, end) =>
+        Call(substringName, i32, Seq(transform(expr), transform(start), transform(end)))
 
       case t.Plus(lhs, rhs) =>
         mkBin(add, lhs, rhs)
