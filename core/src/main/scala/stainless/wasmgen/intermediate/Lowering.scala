@@ -29,8 +29,12 @@ trait Transformer extends stainless.transformers.Transformer {
 
       case s.TupleType(bases) =>
         RecordType(sort(s"_Tuple${bases.size}_").id)
-      case s.SetType(_) | s.BagType(_) | s.MapType(_, _)  => 
-        RecordType(sort("_List_").id)
+      case s.SetType(_) =>
+        RecordType(sort("_Set_").id)
+      case s.BagType(_) =>
+        RecordType(sort("_Bag_").id)
+      case s.MapType(_, _)  =>
+        RecordType(sort("_Map_").id)
 
       case s.PiType(params, to) =>
         transform(s.FunctionType(params.map(_.getType), to.getType), env)
@@ -372,7 +376,7 @@ private [wasmgen] class ExprTransformer (
       // Sets
       case s.FiniteSet(Seq(), base) =>
         val empty = s.ADT(
-          sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
+          sort("_Set_").constructors.find(_.id.name == "_SNil_").get.id,
           Seq(base),
           Seq()
         )
@@ -417,7 +421,7 @@ private [wasmgen] class ExprTransformer (
       // Bags
       case s.FiniteBag(elements, base) =>
         val empty = s.ADT(
-          sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
+          sort("_Bag_").constructors.find(_.id.name == "_BNil_").get.id,
           Seq(s.TupleType(Seq(base, s.IntegerType()))),
           Seq()
         )
@@ -460,14 +464,11 @@ private [wasmgen] class ExprTransformer (
 
       // Maps FIXME maps are wrong
       case s.FiniteMap(Seq(), default, keyType, valueType) =>
-        val empty = s.Tuple(Seq(
-          s.ADT(
-            sort("_List_").constructors.find(_.id.name == "_Nil_").get.id,
-            Seq(s.TupleType(Seq(keyType, valueType))),
-            Seq()
-          ),
-          default
-        ))
+        val empty = s.ADT(
+          sort("_Map_").constructors.find(_.id.name == "_MNil_").get.id,
+          Seq(keyType, valueType),
+          Seq(default)
+        )
         transform(empty, env)
       case s.FiniteMap(pairs, default, keyType, valueType) =>
         val empty = s.FiniteMap(Seq(), default, keyType, valueType)
@@ -591,7 +592,9 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
   def transform(syms0: s.Symbols): t.Symbols = {
 
     // (0) Make toString's
-    val toStrings = syms0.sorts.toSeq.flatMap(_._2.constructors).map(mkToString(_)(syms0))
+    val toStrings = syms0.sorts.toSeq.flatMap(_._2.constructors).filterNot( constr =>
+      Set("_SCons_", "_SNil_") contains constr.id.name
+    ).map(mkToString(_)(syms0))
     val syms = syms0.withFunctions(toStrings)
     val manager = new SymbolsManager
     val env0 = (syms, manager)
