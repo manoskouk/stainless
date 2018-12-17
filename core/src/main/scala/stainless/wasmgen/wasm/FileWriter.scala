@@ -136,9 +136,7 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
         )
     }
 
-    writeNodejsWrapper(
-      withExt("js"), withExt("wasm") //, CheckFilter(
-    )
+    writeNodejsWrapper(withExt("js"), withExt("wasm"))
 
   }
 
