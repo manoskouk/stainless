@@ -422,7 +422,7 @@ private [wasmgen] class ExprTransformer (
       case s.FiniteBag(elements, base) =>
         val empty = s.ADT(
           sort("_Bag_").constructors.find(_.id.name == "_BNil_").get.id,
-          Seq(s.TupleType(Seq(base, s.IntegerType()))),
+          Seq(base),
           Seq()
         )
         elements.foldLeft[Expr](transform(empty, env)) {
@@ -593,7 +593,7 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
 
     // (0) Make toString's
     val toStrings = syms0.sorts.toSeq.flatMap(_._2.constructors).filterNot( constr =>
-      Set("_SCons_", "_SNil_") contains constr.id.name
+      Set("_SCons_", "_SNil_", "_MCons_", "_MNil_", "_BCons_", "_BNil_") contains constr.id.name
     ).map(mkToString(_)(syms0))
     val syms = syms0.withFunctions(toStrings)
     val manager = new SymbolsManager
@@ -616,7 +616,6 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
     ret.records foreach (r => println(r._2.asString))
     ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
-    //println(ret)
 
     ret
   }

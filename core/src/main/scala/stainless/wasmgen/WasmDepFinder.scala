@@ -10,6 +10,8 @@ class WasmDefIdFinder(val s: Symbols) extends DefinitionIdFinder {
   private def sort(name: String) = s.lookup[ADTSort](name).id
 
   private lazy val setIds = Set(sort("_Set_"), fun("__SNil_$0ToString_"), fun("__SCons_$0ToString_"))
+  private lazy val bagIds = Set(sort("_Bag_"), fun("__BNil_$0ToString_"), fun("__BCons_$0ToString_"))
+  private lazy val mapIds = Set(sort("_Map_"), fun("__MNil_$0ToString_"), fun("__MCons_$0ToString_"))
 
   override def traverse(expr: Expr, env: Env): Unit = {
     expr match {
@@ -41,26 +43,26 @@ class WasmDefIdFinder(val s: Symbols) extends DefinitionIdFinder {
       // Bags
       case FiniteBag(_, _) | BagAdd(_, _) =>
         ids += fun("_bagAdd_")
-        ids += sort("_Bag_")
+        ids ++= bagIds
       case MultiplicityInBag(_, _) =>
         ids += fun("_bagMultiplicity_")
-        ids += sort("_Bag_")
+        ids ++= bagIds
       case BagIntersection(_, _) =>
         ids += fun("_bagIntersection_")
-        ids += sort("_Bag_")
+        ids ++= bagIds
       case BagUnion(_, _) =>
         ids += fun("_bagUnion_")
-        ids += sort("_Bag_")
+        ids ++= bagIds
       case BagDifference(_, _) =>
         ids += fun("_bagDifference_")
-        ids += sort("_Bag_")
+        ids ++= bagIds
       // Maps
-      case FiniteMap(_, _, _, _) | MapApply(_, _) =>
-        ids += fun("_mapApply_")
-        ids += sort("_Map_")
-      case MapUpdated(_, _, _) =>
+      case FiniteMap(_, _, _, _) | MapUpdated(_, _, _) =>
         ids += fun("_mapUpdated_")
-        ids += sort("_Map_")
+        ids ++= mapIds
+      case MapApply(_, _) =>
+        ids += fun("_mapApply_")
+        ids ++= mapIds
       case _ =>
     }
     super.traverse(expr, env)

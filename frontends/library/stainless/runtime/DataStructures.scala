@@ -88,7 +88,9 @@ object DataStructures {
   @library
   case class _SNil_[A]() extends _Set_[A]
 
+  @library
   def __SNil_$0ToString_[A](s: _Set_[A]) = "Set()"
+  @library
   def __SCons_$0ToString_[A](s: _Set_[A]) = {
     def rec(s: _Set_[A]): String = s match {
       case _SCons_(e1, s1@ _SCons_(_, _)) => _toString_[A](e1) + ", " + rec(s1)
@@ -158,64 +160,72 @@ object DataStructures {
  
   // We define our own lists to not have to load the entire scala lib
   @library
-  sealed abstract class _Bag_[A] {
-    @inline def ::(elem: A): _Bag_[A] = _BCons_(elem, this)
-  }
+  sealed abstract class _Bag_[A]
   @library
-  case class _BCons_[A](h: A, t: _Bag_[A]) extends _Bag_[A]
+  case class _BCons_[A](elem: A, mult: BigInt, t: _Bag_[A]) extends _Bag_[A]
   @library
   case class _BNil_[A]() extends _Bag_[A]
+
+  @library
+  def __BNil_$0ToString_[A](s: _Bag_[A]) = "Bag()"
+  def __BCons_$0ToString_[A](s: _Bag_[A]) = {
+    def rec(s: _Bag_[A]): String = s match {
+      case _BCons_(e1, m1, b1@ _BCons_(_, _, _)) => _toString_(e1) + " -> " + _toString_(m1) + ", " + rec(b1)
+      case _BCons_(e1, m1, _BNil_()) => _toString_(e1) + " -> " + _toString_(m1)
+    }
+    "Bag(" + rec(s) + ")"
+  }
 
   @library @inline def min(b1: BigInt, b2: BigInt): BigInt = if (b1 <= b2) b1 else b2
   @library @inline def max(b1: BigInt, b2: BigInt): BigInt = if (b1 >= b2) b1 else b2
 
   @library
-  def _bagAdd_[A](bag: _Bag_[(A, BigInt)], elem: A, mult: BigInt): _Bag_[(A, BigInt)] = bag match {
-    case _BNil_() => (elem, mult) :: _BNil_()
-    case _BCons_((h, m), t) =>
+  def _bagAdd_[A](bag: _Bag_[A], elem: A, mult: BigInt): _Bag_[A] = bag match {
+    case _BNil_() => _BCons_ (elem, mult, _BNil_())
+    case _BCons_(h, m, t) =>
       val c = _compare_(elem, h)
-      if (c < 0) (elem, mult) :: bag
-      else if (c > 0) (h, m) :: _bagAdd_(t, elem, mult)
-      else (h, m + mult) :: t
+      if (c < 0) _BCons_(elem, mult, bag)
+      else if (c > 0) _BCons_(h, m, _bagAdd_(t, elem, mult))
+      else _BCons_(h, m + mult, t)
   }
   @library
-  def _bagMultiplicity_[A](bag: _Bag_[(A, BigInt)], elem: A): BigInt = bag match {
+  def _bagMultiplicity_[A](bag: _Bag_[A], elem: A): BigInt = bag match {
     case _BNil_() => 0
-    case _BCons_((h, m), t) =>
+    case _BCons_(h, m, t) =>
       val c = _compare_(elem, h)
       if (c < 0) 0
       else if (c > 0) _bagMultiplicity_(t, elem)
       else m
   }
   @library
-  def _bagIntersection_[A](b1: _Bag_[(A, BigInt)], b2: _Bag_[(A, BigInt)]): _Bag_[(A, BigInt)] = (b1, b2) match {
+  def _bagIntersection_[A](b1: _Bag_[A], b2: _Bag_[A]): _Bag_[A] = (b1, b2) match {
     case (_BNil_(), _) => b2
     case (_, _BNil_()) => b1
-    case (_BCons_((h1, m1), t1), _BCons_((h2, m2), t2)) =>
+    case (_BCons_(h1, m1, t1), _BCons_(h2, m2, t2)) =>
       val c = _compare_(h1, h2)
       if (c < 0) _bagIntersection_(t1, b2)
       else if (c > 0) _bagIntersection_(b1, t2)
-      else (h1, min(m1, m2)) :: _bagIntersection_(t1, t2)
+      else _BCons_(h1, min(m1, m2), _bagIntersection_(t1, t2))
   }
   @library
-  def _bagUnion_[A](b1: _Bag_[(A, BigInt)], b2: _Bag_[(A, BigInt)]): _Bag_[(A, BigInt)] = (b1, b2) match {
+  def _bagUnion_[A](b1: _Bag_[A], b2: _Bag_[A]): _Bag_[A] = (b1, b2) match {
     case (_BNil_(), _) => b2
     case (_, _BNil_()) => b1
-    case (_BCons_((h1, m1), t1), _BCons_((h2, m2), t2)) =>
+    case (_BCons_(h1, m1, t1), _BCons_(h2, m2, t2)) =>
       val c = _compare_(h1, h2)
-      if (c < 0) (h1, m1) :: _bagUnion_(t1, b2)
-      else if (c > 0) (h2, m2) :: _bagUnion_(b1, t2)
-      else (h1, m1 + m2) :: _bagUnion_(t1, t2)
+      if (c < 0) _BCons_(h1, m1, _bagUnion_(t1, b2))
+      else if (c > 0) _BCons_(h2, m2, _bagUnion_(b1, t2))
+      else _BCons_(h1, m1 + m2, _bagUnion_(t1, t2))
   }
   @library
-  def _bagDifference_[A](b1: _Bag_[(A, BigInt)], b2: _Bag_[(A, BigInt)]): _Bag_[(A, BigInt)] = (b1, b2) match {
+  def _bagDifference_[A](b1: _Bag_[A], b2: _Bag_[A]): _Bag_[A] = (b1, b2) match {
     case (_BNil_(), _) => _BNil_()
     case (_, _BNil_()) => b1
-    case (_BCons_((h1, m1), t1), _BCons_((h2, m2), t2)) =>
+    case (_BCons_(h1, m1, t1), _BCons_(h2, m2, t2)) =>
       val c = _compare_(h1, h2)
-      if (c < 0) (h1, m1) :: _bagDifference_(t1, b2)
+      if (c < 0) _BCons_(h1, m1, _bagDifference_(t1, b2))
       else if (c > 0) _bagDifference_(b1, t2)
-      else (h1, max(0, m1 - m2)) :: _bagDifference_(t1, t2)
+      else _BCons_(h1, max(0, m1 - m2), _bagDifference_(t1, t2))
   }
  
   @library
@@ -226,6 +236,22 @@ object DataStructures {
   case class _MCons_[K, V](key: K, value: V, t: _Map_[K, V]) extends _Map_[K, V]
   @library
   case class _MNil_[K, V](default: V) extends _Map_[K, V]
+
+  @library
+  def __MNil_$0ToString_[K, V](s: _Map_[K, V]) = {
+    val _MNil_(default) = s
+    "Map().withDefaultValue(" + _toString_(default) + ")"
+  }
+  @library 
+  def __MCons_$0ToString_[K, V](s: _Map_[K, V]) = {
+    def rec(s: _Map_[K, V]): String = s match {
+      case _MCons_(k1, v1, m1@ _MCons_(_, _, _)) =>
+        _toString_(k1) + " -> " + _toString_(v1) + ", " + rec(m1)
+      case _MCons_(k1, v1, _MNil_(default)) =>
+        _toString_(k1) + " -> " + _toString_(v1) + ").withDefaultValue(" + _toString_(default) + ")"
+    }
+    "Map(" + rec(s)
+  }
 
   @library
   def _mapApply_[K, V](map: _Map_[K, V], key: K): V = map match {
