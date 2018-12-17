@@ -5,7 +5,7 @@ package codegen
 
 import stainless.Identifier
 import intermediate.{trees => t}
-import wasm.LocalsHandler
+import wasm.{GlobalsHandler, LocalsHandler}
 import wasm.Expressions.{eq => EQ, _}
 import wasm.Types._
 import wasm.Definitions._
@@ -17,6 +17,9 @@ import wasm.Definitions._
   */
 object LinearMemoryCodeGen extends CodeGeneration {
   private val memB = "memB"
+  private def getMem(implicit gh: GlobalsHandler) = GetGlobal(memB)
+  private def setMem(expr: Expr)(implicit gh: GlobalsHandler) =
+    SetGlobal(memB, expr)
 
   override protected def mkImports(s: t.Symbols) = Seq(
     Import("system", "mem", Memory(100))
@@ -86,41 +89,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
     implicit val impS = s
     type BinContext = (Expr, Expr) => (Expr, String)
 
-    def mkComp(l: Expr, r: Expr)(implicit lh: LocalsHandler): Expr = l.getType match {
-      case `i32` => sub(l, r)
-      case `i64` => Wrap(i32, sub(l, r))
-      case `f32` => Sequence(Seq(
-        SetLocal("tempf32", sub(l, r)),
-        If(
-          freshLabel("label"),
-          gt(GetLocal("tempf32"), F32Const(0)),
-          I32Const(1),
-          If(
-            freshLabel("label"),
-            lt(GetLocal("tempf32"), F32Const(0)),
-            I32Const(-1),
-            I32Const(0)
-          )
-        )
-      ))
-      case `f64` => Sequence(Seq(
-        SetLocal("tempf64", sub(l, r)),
-        If(
-          freshLabel("label"),
-          gt(GetLocal("tempf64"), F64Const(0)),
-          I32Const(1),
-          If(
-            freshLabel("label"),
-            lt(GetLocal("tempf64"), F64Const(0)),
-            I32Const(-1),
-            I32Const(0)
-          )
-        )
-      ))
-    }
-
     def boxedIneq(tpe: Type, lhs: Expr, rhs: Expr)(name: String = tpe.toString)(implicit lh: LocalsHandler): (Expr, String) =
-      (mkComp(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
+      (baseTypeIneq(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
 
     def recordIneq(rec: t.RecordSort, lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): (Expr, String) = {
       // We get offsets of all fields except first (typeTag) which we know is equal already
@@ -213,8 +183,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
       val index = lh.getFreshLocal("index", i32)
       val loop = freshLabel("loop")
       Sequence(Seq(
-        GetGlobal(memB), // Leave substring addr on the stack
-        Store(None, GetGlobal(memB), sub(to, from)), // substring length
+        getMem, // Leave substring addr on the stack
+        Store(None, getMem, sub(to, from)), // substring length
         SetLocal(index, I32Const(0)),
         Loop(loop,
           If(
@@ -222,7 +192,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Signed)(GetLocal(index), sub(to, from)), // index < length
             Sequence(Seq(
               Store(None,
-                elemAddr(GetGlobal(memB), GetLocal(index), i32),
+                elemAddr(getMem, GetLocal(index), i32),
                 Load(i32, None, elemAddr(str, add(from, GetLocal(index)), i32))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
@@ -231,7 +201,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Nop
           )
         ),
-        SetGlobal(memB, add(GetGlobal(memB), add(sub(to, from), I32Const(4))))
+        setMem(add(getMem, add(sub(to, from), I32Const(4))))
       ))
     }
   }
@@ -247,7 +217,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       val loop = freshLabel("loop")
       Sequence(Seq(
         GetGlobal(memB), // Leave concat addr on the stack
-        Store(None, GetGlobal(memB), add(len1, len2)), // concat length
+        Store(None, getMem, add(len1, len2)), // concat length
         SetLocal(index, I32Const(0)),
         Loop(loop,
           If(
@@ -255,7 +225,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Signed)(GetLocal(index), len1), // index < length
             Sequence(Seq(
               Store(None,
-                elemAddr(GetGlobal(memB), GetLocal(index), i32),
+                elemAddr(getMem, GetLocal(index), i32),
                 Load(i32, None, elemAddr(lhs, GetLocal(index), i32))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
@@ -271,7 +241,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Signed)(GetLocal(index), len2), // index < length
             Sequence(Seq(
               Store(None,
-                elemAddr(GetGlobal(memB), add(len1, GetLocal(index)), i32),
+                elemAddr(getMem, add(len1, GetLocal(index)), i32),
                 Load(i32, None, elemAddr(rhs, GetLocal(index), i32))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
@@ -280,7 +250,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Nop
           )
         ),
-        SetGlobal(memB, elemAddr(GetGlobal(memB), add(len1, len2), i32))
+        setMem(elemAddr(getMem, add(len1, len2), i32))
       ))
     }
   }
@@ -292,9 +262,9 @@ object LinearMemoryCodeGen extends CodeGeneration {
     val offsets = exprs.scanLeft(0)(_ + _.getType.size)
     val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
     Sequence(
-      SetLocal(memCache, GetGlobal(memB)) +:
+      SetLocal(memCache, getMem) +:
         // Already set new memB because fields may also need new memory
-        SetGlobal(memB, add(GetLocal(memCache), I32Const(offsets.last))) +:
+        setMem(add(GetLocal(memCache), I32Const(offsets.last))) +:
         exprs
           .zip(offsets)
           .map { case (e, off) =>
@@ -369,11 +339,11 @@ object LinearMemoryCodeGen extends CodeGeneration {
     val ind = lh.getFreshLocal(freshLabel("index"), i32)
     val loop = freshLabel("loop")
 
-    def indToPtr(e: Expr) = add(GetLocal(memCache), add(I32Const(4), mul(I32Const(base.size), e)))
+    def indToPtr(e: Expr) = elemAddr(GetLocal(memCache), e, base)
 
     Sequence(Seq(
-      SetLocal(memCache, GetGlobal(memB)),
-      SetGlobal(memB, indToPtr(GetLocal(len))),
+      SetLocal(memCache, getMem),
+      setMem(indToPtr(GetLocal(len))),
       SetLocal(len, length),
       Store(None, GetLocal(memCache), GetLocal(len)),
       SetLocal(ind, I32Const(0))
@@ -396,18 +366,11 @@ object LinearMemoryCodeGen extends CodeGeneration {
   }
 
   protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr = {
-    Load(
-      base, None,
-      add(array, add(I32Const(4), mul(index, I32Const(base.size))))
-    )
+    Load(base, None, elemAddr(array, index, base))
   }
 
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr = {
-    Store(
-      None,
-      add(array, add(I32Const(4), mul(index, I32Const(value.getType.size)))),
-      value
-    )
+    Store(None, elemAddr(array, index, value.getType), value)
   }
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)

@@ -143,18 +143,23 @@ trait CodeGeneration {
         EQ(lhs, rhs)
     }
   }
-  final protected def surfaceIneq(lhs: Expr, rhs: Expr, tpe: t.Type): Expr = {
+  final protected def surfaceIneq(lhs: Expr, rhs: Expr, tpe: t.Type): Expr =
     tpe match {
       case t.RecordType(_) =>
         Call(refInequalityName, i32, Seq(lhs, rhs))
-      case t.RealType() =>
-        Truncate(i32, Signed, sub(lhs, rhs)) // FIXME!!!
-      case t.BVType(_, 64) =>
-        Wrap(i32, sub(lhs, rhs))
       case _ =>
+        baseTypeIneq(lhs, rhs)
+    }
+  final protected def baseTypeIneq(lhs: Expr, rhs: Expr): Expr =
+    lhs.getType match {
+      case `f32` | `f64` =>
+        Truncate(i32, Signed, sub(lhs, rhs)) // FIXME!!!
+      case `i64` =>
+        Wrap(i32, sub(lhs, rhs))
+      case `i32` =>
         sub(lhs, rhs)
     }
-  }
+
   final protected def surfaceToString(arg: Expr, tpe: t.Type)(implicit funEnv: FunEnv): Expr = {
     tpe match {
       case t.RecordType(_) =>
