@@ -64,7 +64,12 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |
           |    printString: function(arg) {
           |      var bufView = new Uint8Array(memory.buffer);
-          |      var len = bufView[arg];
+          |      var len = (
+          |        bufView[arg] +
+          |        bufView[arg+1] * 0xFF +
+          |        bufView[arg+2] * 0xFFFF +
+          |        bufView[arg+3] * 0xFFFFFF
+          |      );
           |      var i = 0;
           |      var result = "";
           |      while(i < 4 * len) {
