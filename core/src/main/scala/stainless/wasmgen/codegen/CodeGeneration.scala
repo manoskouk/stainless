@@ -264,9 +264,9 @@ trait CodeGeneration {
         val l1 = (length >> 8) & mask
         val l2 = (length >> 16) & mask
         val l3 = (length >> 24) & mask
-        val lbytes = Seq(l0, l1, l2, l3) // Little endian
-        val content = str.flatMap(char => Seq(char, 0, 0, 0))
-        I32Const(env.dh.addNext((lbytes ++ content).map(_.toByte)))
+        val lbytes = Seq(l0, l1, l2, l3).map(_.toByte.r) // Little endian
+        val content = str.flatMap(char => Seq(char, 0, 0, 0).map(_.toByte.f))
+        I32Const(env.dh.addNext(lbytes ++ content))
       case t.CharLiteral(value) =>
         I32Const(value.toInt)
       case t.IntegerLiteral(value) =>

@@ -29,8 +29,9 @@ object Printer {
   }
 
   private def doc(data: Data): Document = {
-    def formatByte(b: Byte) = {
-      if (b >= 20 && b != 0x7F && b != '"' && b != '\\') b.toChar.toString
+    def formatByte(fb: FormattedByte) = {
+      val b = fb.byte
+      if (fb.formatted && b >= 0x20 && b != 0x7F && b != '"' && b != '\\') b.toChar.toString
       else "\\%02X" format b
     }
     s"""(data (offset (i32.const ${data.offset})) "${data.bytes.map(formatByte).mkString}" )"""

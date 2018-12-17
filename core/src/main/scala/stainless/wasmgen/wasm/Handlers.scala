@@ -33,7 +33,7 @@ class LocalsHandler(args: Seq[ValDef]) {
 class DataHandler(init: Int) {
   private var data_ : Seq[Data] = Seq()
   private var offset = init
-  def addNext(bytes: Seq[Byte]): Int = {
+  def addNext(bytes: Seq[FormattedByte]): Int = {
     data_ :+= Data(offset, bytes)
     val current = offset
     offset += bytes.length

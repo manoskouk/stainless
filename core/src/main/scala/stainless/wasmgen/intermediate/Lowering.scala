@@ -485,7 +485,7 @@ private [wasmgen] class ExprTransformer (
         )
       case s.MapUpdated(map, key, value) =>
         FunctionInvocation(
-          fun("_mapUndated_").id, Seq(),
+          fun("_mapUpdated_").id, Seq(),
           Seq(transform(map, env), maybeBox(key, AnyRefType, env), maybeBox(value, AnyRefType, env))
         )
 

@@ -51,5 +51,10 @@ object Definitions {
     def indexOf(fun: Label) = funs.indexOf(fun)
   }
 
-  case class Data(offset: Int, bytes: Seq[Byte])
+  case class FormattedByte(byte: Byte, formatted: Boolean)
+  implicit class FormatByte(byte: Byte) {
+    def f = FormattedByte(byte, true)
+    def r = FormattedByte(byte, false)
+  }
+  case class Data(offset: Int, bytes: Seq[FormattedByte])
 }

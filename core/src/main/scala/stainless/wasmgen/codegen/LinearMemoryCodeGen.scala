@@ -3,7 +3,7 @@
 package stainless.wasmgen
 package codegen
 
-import stainless.{Identifier, FreshIdentifier}
+import stainless.Identifier
 import intermediate.{trees => t}
 import wasm.{GlobalsHandler, LocalsHandler}
 import wasm.Expressions.{eq => EQ, _}
