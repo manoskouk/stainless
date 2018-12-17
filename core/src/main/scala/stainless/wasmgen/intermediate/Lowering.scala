@@ -638,7 +638,6 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
     // (0) Make toString's
     val toStrings = syms0.sorts.toSeq.flatMap(_._2.constructors).map(mkToString(_)(syms0))
     val syms = syms0.withFunctions(toStrings)
-    toStrings.foreach(fn => println(syms.explainTyping(fn.fullBody)(s.PrinterOptions())))
     val manager = new SymbolsManager
     val env0 = (syms, manager)
 
