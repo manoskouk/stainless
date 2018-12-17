@@ -232,15 +232,16 @@ object LinearMemoryCodeGen extends CodeGeneration {
       val from = GetLocal("from")
       val to = GetLocal("to")
       val index = lh.getFreshLocal("index", i32)
+      val length = lh.getFreshLocal("length", i32)
       val loop = freshLabel("loop")
       Sequence(Seq(
-        getMem, // Leave substring addr on the stack
-        Store(None, getMem, sub(to, from)), // substring length
+        SetLocal(length, sub(to, from)),
+        Store(None, getMem, GetLocal(length)),
         SetLocal(index, I32Const(0)),
         Loop(loop,
           If(
             freshLabel("label"),
-            lt(Signed)(GetLocal(index), sub(to, from)), // index < length
+            lt(Unsigned)(GetLocal(index), GetLocal(length)), // index < length
             Sequence(Seq(
               Store(None,
                 elemAddr(getMem, GetLocal(index), i32),
@@ -252,7 +253,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Nop
           )
         ),
-        setMem(add(getMem, add(sub(to, from), I32Const(4))))
+        getMem, // Leave substring addr on the stack
+        setMem(elemAddr(getMem, GetLocal(length), i32))
       ))
     }
   }

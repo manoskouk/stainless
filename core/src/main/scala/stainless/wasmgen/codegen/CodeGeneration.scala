@@ -307,11 +307,11 @@ trait CodeGeneration {
         mkArrayLength(transform(array))
 
       case t.StringLength(expr) =>
-        mkArrayLength(transform(expr))
+        Extend(i64, Unsigned, mkArrayLength(transform(expr)))
       case t.StringConcat(lhs, rhs) =>
         Call(stringConcatName, i32, Seq(transform(lhs), transform(rhs)))
       case t.SubString(expr, start, end) =>
-        Call(substringName, i32, Seq(transform(expr), transform(start), transform(end)))
+        Call(substringName, i32, Seq(transform(expr), Wrap(i32, transform(start)), Wrap(i32, transform(end))))
 
       case t.Plus(lhs, rhs) =>
         mkBin(add, lhs, rhs)
