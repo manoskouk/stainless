@@ -18,8 +18,6 @@ trait Transformer extends stainless.transformers.Transformer {
     implicit val impSyms = env._1
     import t._
     tp match {
-      case s.CharType() => Int32Type()
-      case s.IntegerType() => Int64Type() // TODO: Implement big integers properly
 
       case s.ADTType(id, tps) =>
         RecordType(id)
@@ -50,6 +48,8 @@ trait Transformer extends stainless.transformers.Transformer {
       // case s.Untyped =>
       // case s.RealType() => TODO: Represent Reals properly
       // case s.BVType(signed, size) =>
+      //case s.CharType() =>
+      //case s.IntegerType() => // TODO: Implement big integers properly
 
       case _ => super.transform(tp, env)
     }
@@ -147,17 +147,6 @@ private [wasmgen] class ExprTransformer (
   override def transform(e: s.Expr, env: Env): Expr = {
     implicit val impSyms = env._1
     e match {
-      // Literals
-      case s.CharLiteral(value) =>
-        Int32Literal(value)
-      case s.IntegerLiteral(value) =>
-        // TODO: Represent mathematical integers adequately
-        t.Int64Literal(
-          if (value.isValidLong) value.toLong
-          else if (value > Long.MaxValue) Long.MaxValue
-          else Long.MinValue
-        )
-
       // Misc.
       case s.Annotated(body, flags) =>
         transform(body, env)
@@ -620,9 +609,9 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    //implicit val printerOptions = t.PrinterOptions(printUniqueIds = true)
-    //ret.records foreach (r => println(r._2.asString))
-    //ret.functions foreach (r => println(r._2.asString))
+    implicit val printerOptions = t.PrinterOptions(printUniqueIds = true)
+    ret.records foreach (r => println(r._2.asString))
+    ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 

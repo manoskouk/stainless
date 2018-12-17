@@ -3,7 +3,7 @@
 package stainless.wasmgen
 package codegen
 
-import stainless.Identifier
+import stainless.{Identifier, FreshIdentifier}
 import intermediate.{trees => t}
 import wasm.{GlobalsHandler, LocalsHandler}
 import wasm.Expressions.{eq => EQ, _}
@@ -56,10 +56,18 @@ object LinearMemoryCodeGen extends CodeGeneration {
       }, rec.id.uniqueName)
     }
 
-    val allEqs: (Expr, Expr) => Seq[(Expr, String)] = (lhs, rhs) => {
-      boxedEq(i32)()(lhs, rhs) +: boxedEq(i64)()(lhs, rhs) +: boxedEq(f32)()(lhs, rhs) +: boxedEq(f64)()(lhs, rhs) +:
-        boxedEq(i32)("array")(lhs, rhs) /* Array reference equality */ +:
-        boxedEq(i32)("function")(lhs, rhs) /* Function reference equality */ +: {
+    def allEqs(lhs: Expr, rhs: Expr): Seq[(Expr, String)] = {
+      Seq(
+        boxedEq(i32)("boolean")(lhs, rhs),
+        boxedEq(i32)("char")(lhs, rhs),
+        boxedEq(i32)()(lhs, rhs),
+        boxedEq(i64)()(lhs, rhs),
+        boxedEq(i64)("BigInt")(lhs, rhs),
+        boxedEq(f64)()(lhs, rhs),
+        boxedEq(i32)("array")(lhs, rhs),
+        boxedEq(i32)("string")(lhs, rhs),
+        boxedEq(i32)("function")(lhs, rhs)
+      ) ++ {
         val sorts = s.records.values.toSeq.collect { case c: t.ConstructorSort => c }.sortBy(_.typeTag)
         //assert(sorts.head.typeTag == 6)
         sorts map (s => recordEq(s)(lhs, rhs))
@@ -110,11 +118,18 @@ object LinearMemoryCodeGen extends CodeGeneration {
     }
 
     def allIneqs(lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): Seq[(Expr, String)] = {
-      boxedIneq(i32, lhs, rhs)() +: boxedIneq(i64, lhs, rhs)() +: boxedIneq(f32, lhs, rhs)() +: boxedIneq(f64, lhs, rhs)() +:
-        boxedIneq(i32, lhs, rhs)("array") /* Array reference equality */ +:
-        boxedIneq(i32, lhs, rhs)("function") /* Function reference equality */ +: {
+      Seq(
+        boxedIneq(i32, lhs, rhs)("boolean"),
+        boxedIneq(i32, lhs, rhs)("char"),
+        boxedIneq(i32, lhs, rhs)(),
+        boxedIneq(i64, lhs, rhs)(),
+        boxedIneq(i64, lhs, rhs)("BigInt"),
+        boxedIneq(f64, lhs, rhs)(),
+        boxedIneq(i32, lhs, rhs)("array"),
+        boxedIneq(i32, lhs, rhs)("string"),
+        boxedIneq(i32, lhs, rhs)("function")
+      ) ++ {
         val sorts = s.records.values.toSeq.collect { case c: t.ConstructorSort => c }.sortBy(_.typeTag)
-        //assert(sorts.head.typeTag == 6)
         sorts map (s => recordIneq(s, lhs, rhs, temp))
       }
     }
@@ -144,19 +159,27 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
 
   protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef = {
-    implicit val impS = s
+    //implicit val impS = s
 
-    def boxedToString(tpe: Type, arg: Expr): (Expr, String) =
-      (Call(toStringName(tpe.toString), i32, Seq(Load(tpe, None, add(arg, I32Const(4))))), tpe.toString)
+    def boxedToString(tpe: Type, arg: Expr)(tpeName: String = tpe.toString): (Expr, String) =
+      (Call(toStringName(tpeName), i32, Seq(Load(tpe, None, add(arg, I32Const(4))))), tpeName)
 
     def recordToString(rec: t.ConstructorSort, arg: Expr): (Expr, String) = {
       (Call(toStringName(rec.id.uniqueName), i32, Seq(arg)), rec.id.uniqueName)
     }
 
-    val allToStrings: Expr => Seq[(Expr, String)] = arg => {
-      boxedToString(i32, arg) +: boxedToString(i64, arg) +: boxedToString(f32, arg) +: boxedToString(f64, arg) +:
-        (Call(toStringName("array"), i32, Seq()), "array") +:
-        (Call(toStringName("fun"), i32, Seq()), "function") +: {
+    def allToStrings(arg: Expr): Seq[(Expr, String)] = {
+      Seq(
+        boxedToString(i32, arg)("boolean"),
+        boxedToString(i32, arg)("char"),
+        boxedToString(i32, arg)(),
+        boxedToString(i64, arg)(),
+        boxedToString(i64, arg)("BigInt"),
+        boxedToString(f64, arg)(),
+        boxedToString(i32, arg)("array"),
+        (Load(i32, None, add(arg, I32Const(4))), "string"),
+        (Call(toStringName("fun"), i32, Seq()), "function")
+      ) ++ {
         val sorts = s.records.values.toSeq.collect { case c: t.ConstructorSort => c }.sortBy(_.typeTag)
         sorts map (s => recordToString(s, arg))
       }
@@ -171,6 +194,34 @@ object LinearMemoryCodeGen extends CodeGeneration {
       }
     }
   }
+
+  protected def mkCharToString(implicit funEnv: FunEnv): FunDef = {
+    implicit val gh = funEnv.gh
+    FunDef(toStringName("char"), Seq(ValDef("arg", i32)), i32){ implicit lh =>
+      Sequence(Seq(
+        getMem,
+        Store(None, getMem, I32Const(1)),
+        Store(None, add(getMem, I32Const(4)), GetLocal("arg")),
+        setMem(add(getMem, I32Const(8)))
+      ))
+    }
+  }
+
+  protected def mkBigIntToString(implicit funEnv: FunEnv): FunDef = {
+    FunDef(toStringName("BigInt"), Seq(ValDef("arg", i64)), i32){ implicit lh =>
+      implicit val env = funEnv.env(lh)
+      Call(stringConcatName, i32, Seq(
+        Call(stringConcatName, i32, Seq(
+          transform(t.StringLiteral("BigInt(")),
+          Call(toStringName("i64"), i32, Seq(GetLocal("arg")))
+        )),
+        transform(t.StringLiteral(")"))
+      ))
+    }
+  }
+
+  protected def mkArrayToString(implicit funEnv: FunEnv) = ???
+
 
   private def elemAddr(array: Expr, offset: Expr, tpe: Type) = add(array, mul(add(offset, I32Const(1)), I32Const(tpe.size)))
 

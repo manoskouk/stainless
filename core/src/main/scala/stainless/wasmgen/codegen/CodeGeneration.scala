@@ -44,7 +44,8 @@ trait CodeGeneration {
       mkMain(s, toExecute),
       mkEquality(s), mkInequality(s),
       mkFloatToSign(f32), mkFloatToSign(f64),
-      mkToString(s), mkf32ToString, mkStringConcat, mkSubstring
+      mkToString(s), mkBigIntToString, /*mkArrayToString,*/ mkCharToString,
+      mkStringConcat, mkSubstring
     )
   }
 
@@ -78,11 +79,11 @@ trait CodeGeneration {
   protected def mkEquality(s: t.Symbols): FunDef
   protected def mkInequality(s: t.Symbols): FunDef
   protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
+  protected def mkCharToString(implicit funEnv: FunEnv): FunDef
+  protected def mkBigIntToString(implicit funEnv: FunEnv): FunDef
+  protected def mkArrayToString(implicit funEnv: FunEnv): FunDef
   protected def mkStringConcat(implicit funEnv: FunEnv): FunDef
   protected def mkSubstring(implicit funEnv: FunEnv): FunDef
-  private val mkf32ToString = {
-    FunDef("_f32ToString_", Seq(ValDef("arg", f32)), i32) { _ => Unreachable }
-  }
   private def mkFloatToSign(tpe: Type) = {
     require(tpe == f32 || tpe == f64)
     FunDef(floatToSignName(tpe), Seq(ValDef("lhs", tpe), ValDef("rhs", tpe)), i32) { implicit lh =>
@@ -159,10 +160,14 @@ trait CodeGeneration {
         Call(refToStringName, i32, Seq(arg))
       case t.BooleanType() =>
         Call(toStringName("boolean"), i32, Seq(arg))
+      case t.CharType() =>
+        Call(toStringName("char"), i32, Seq(arg))
       case t.StringType() =>
         arg
       case t.ArrayType(_) =>
         Call(toStringName("array"), i32, Seq(arg))
+      case t.IntegerType() =>
+        Call(toStringName("BigInt"), i32, Seq(arg))
       case _ =>
         Call(toStringName(arg.getType.toString), i32, Seq(arg))
     }
@@ -262,6 +267,16 @@ trait CodeGeneration {
         val lbytes = Seq(l0, l1, l2, l3) // Little endian
         val content = str.flatMap(char => Seq(char, 0, 0, 0))
         I32Const(env.dh.addNext((lbytes ++ content).map(_.toByte)))
+      case t.CharLiteral(value) =>
+        I32Const(value.toInt)
+      case t.IntegerLiteral(value) =>
+        // TODO: Represent mathematical integers adequately
+        I64Const(
+          if (value.isValidLong) value.toLong
+          else if (value > Long.MaxValue) Long.MaxValue
+          else Long.MinValue
+        )
+
       case t.Record(tpe, fields) =>
         mkRecord(tpe, fields map transform)
       case rs@t.RecordSelector(record, selector) =>
@@ -360,7 +375,8 @@ trait CodeGeneration {
   /** Transform a stainless type to a wasm type */
   def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
     case t.UnitType() => void
-    case t.BooleanType() => i32
+    case t.BooleanType() | t.CharType() => i32
+    case t.IntegerType() => i64
     case t.RealType() => f64
     case t.BVType(_, size) => if (size == 64) i64 else i32
     case t.ArrayType(_) | t.RecordType(_) | t.StringType() =>
