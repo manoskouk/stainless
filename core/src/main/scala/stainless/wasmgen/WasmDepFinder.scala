@@ -82,7 +82,7 @@ class WasmDependenciesFinder extends DependenciesFinder {
     super.findDependencies(roots, s)
       .withFunctions(Seq(
         "_toString_", "_digitToStringL_", "_digitToStringI_", "_i32ToString_", "_i64ToString_",
-        "_f64ToString_", "_booleanToString_", "_funToString_", "_arrayToString_"
+        "_f64ToString_", "_booleanToString_", "_funToString_"
       ).map(fun))
   }
 }

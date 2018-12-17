@@ -44,7 +44,7 @@ trait CodeGeneration {
       mkMain(s, toExecute),
       mkEquality(s), mkInequality(s),
       mkFloatToSign(f32), mkFloatToSign(f64),
-      mkToString(s), mkBigIntToString, /*mkArrayToString,*/ mkCharToString,
+      mkToString(s), mkBigIntToString, mkArrayToString, mkCharToString,
       mkStringConcat, mkSubstring
     )
   }

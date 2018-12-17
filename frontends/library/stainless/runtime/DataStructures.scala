@@ -71,8 +71,6 @@ object DataStructures {
 	def _f64ToString_(b: Real): String = "<real>"
 	@library
 	def _funToString_(): String = "<function>"
-  @library
-  def _arrayToString_[A](a: Array[A]): String = "<array>"
 
   /* compares two elements of any type. Will be filled in by the code generator */
   @library

@@ -188,7 +188,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     FunDef(refToStringName, Seq(ValDef("arg", i32)), i32) { implicit lh =>
       val toStrings = allToStrings(GetLocal("arg"))
       // We use i32 as default, whatever, should not happen
-      val jump = Br_Table(toStrings.map(_._2), toStrings.head._2, Load(i32, None, GetLocal("arg")), None)
+      val jump = Br_Table(toStrings.map(_._2), toStrings(2)._2, Load(i32, None, GetLocal("arg")), None)
       toStrings.foldLeft(jump: Expr) { case (first, (toS, label)) =>
         Sequence(Seq(Block(label, first), Return(toS)))
       }
@@ -220,7 +220,52 @@ object LinearMemoryCodeGen extends CodeGeneration {
     }
   }
 
-  protected def mkArrayToString(implicit funEnv: FunEnv) = ???
+  protected def mkArrayToString(implicit funEnv: FunEnv): FunDef = {
+    FunDef(toStringName("array"), Seq(ValDef("array", i32)), i32) { implicit lh =>
+      implicit val env = funEnv.env(lh)
+      val ind = lh.getFreshLocal(freshLabel("index"), i32)
+      val curr = lh.getFreshLocal(freshLabel("current"), i32)
+      val loop = freshLabel("loop")
+
+      def indToPtr(e: Expr) = elemAddr(GetLocal("array"), e, i32)
+
+      Sequence(Seq(
+        SetLocal(ind, I32Const(0)),
+        SetLocal(curr, transform(t.StringLiteral(""))),
+        Loop(loop,
+          If(
+            freshLabel("label"),
+            lt(Unsigned)(GetLocal(ind), Load(i32, None, GetLocal("array"))),
+            Sequence(Seq(
+              SetLocal(curr,
+                Call(stringConcatName, i32, Seq(
+                  GetLocal(curr),
+                  If(
+                    freshLabel("label"),
+                    eqz(GetLocal(ind)),
+                    Call(refToStringName, i32, Seq(Load(i32, None, indToPtr(GetLocal(ind))))),
+                    Call(stringConcatName, i32, Seq(
+                      transform(t.StringLiteral(", ")),
+                      Call(refToStringName, i32, Seq(Load(i32, None, indToPtr(GetLocal(ind)))))
+                    ))
+                  )
+                ))
+              ),
+              SetLocal(ind, add(GetLocal(ind), I32Const(1))),
+              Br(loop)
+            )),
+            Nop
+          )
+        ),
+        Call(stringConcatName, i32, Seq(
+          transform(t.StringLiteral("Array(")),
+          Call(stringConcatName, i32, Seq(
+            GetLocal(curr), transform(t.StringLiteral(")"))
+          ))
+        ))
+      ))
+    }
+  }
 
 
   private def elemAddr(array: Expr, offset: Expr, tpe: Type) = add(array, mul(add(offset, I32Const(1)), I32Const(tpe.size)))
@@ -396,16 +441,16 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
     Sequence(Seq(
       SetLocal(memCache, getMem),
-      setMem(indToPtr(GetLocal(len))),
       SetLocal(len, length),
-      Store(None, GetLocal(memCache), GetLocal(len)),
-      SetLocal(ind, I32Const(0))
+      setMem(indToPtr(GetLocal(len))),
+      Store(None, GetLocal(memCache), GetLocal(len))
     ) ++ (init match {
       case Some(elem) =>
         val initL = lh.getFreshLocal(freshLabel("init"), i32)
         Seq(
+          SetLocal(ind, I32Const(0)),
           SetLocal(initL, elem),
-          Block(loop, Sequence(Seq(
+          Block(loop, Sequence(Seq( // FIXME!!
             Br_If(loop, ge(GetLocal(ind), GetLocal(len))),
             Store(None, indToPtr(GetLocal(ind)), GetLocal(initL)),
             SetLocal(ind, add(GetLocal(ind), I32Const(1)))
