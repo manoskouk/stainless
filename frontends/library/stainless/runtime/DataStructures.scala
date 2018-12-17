@@ -19,7 +19,7 @@ object DataStructures {
 
   /* String transformers for basic types */
 	@library
-  def digitToStringL(b: Long): String = {
+  def _digitToStringL_(b: Long): String = {
     b match {
       case _ if b == 0 => "0"
       case _ if b == 1 => "1"
@@ -35,7 +35,7 @@ object DataStructures {
   }
 
   @library
-  def digitToStringI(b: Int): String = {
+  def _digitToStringI_(b: Int): String = {
     b match {
       case _ if b == 0 => "0"
       case _ if b == 1 => "1"
@@ -53,15 +53,15 @@ object DataStructures {
 	@library
   def _i64ToString_(b: Long): String = {
     if (b < 0) "-" + _i64ToString_(-b)
-    else if (b <= 9) digitToStringL(b)
-    else _i64ToString_(b / 10) + digitToStringL(b % 10)
+    else if (b <= 9) _digitToStringL_(b)
+    else _i64ToString_(b / 10) + _digitToStringL_(b % 10)
   }
 
 	@library
   def _i32ToString_(b: Int): String = {
     if (b < 0) "-" + _i32ToString_(-b)
-    else if (b <= 9) digitToStringI(b)
-    else _i32ToString_(b / 10) + digitToStringI(b % 10)
+    else if (b <= 9) _digitToStringI_(b)
+    else _i32ToString_(b / 10) + _digitToStringI_(b % 10)
   }
 
 
@@ -71,8 +71,6 @@ object DataStructures {
 	def _f64ToString_(b: Real): String = "<real>"
 	@library
 	def _funToString_(): String = "<function>"
-	@library
-	def _arrayToString_(): String = "<array>"
 
   /* compares two elements of any type. Will be filled in by the code generator */
   @library
