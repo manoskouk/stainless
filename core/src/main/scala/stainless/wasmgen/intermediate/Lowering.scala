@@ -3,12 +3,9 @@
 package stainless.wasmgen
 package intermediate
 
-import stainless.ast.SymbolIdentifier
 import stainless.{FreshIdentifier, Identifier}
 
 trait Transformer extends stainless.transformers.Transformer {
-  implicit protected lazy val printerOptions = t.PrinterOptions(printUniqueIds = true)
-
   val s = stainless.trees
   val t = trees
 
@@ -49,7 +46,7 @@ trait Transformer extends stainless.transformers.Transformer {
         RecordType(AnyRefSort.id)
 
       // These remain the same
-      // case s.RealType() => TODO: We will represent Reals as floats (?)
+      // case s.RealType() => TODO: Represent Reals properly
       // case s.ArrayType(base) =>
       // case s.BVType(signed, size) =>
 
@@ -138,7 +135,7 @@ private [wasmgen] class ExprTransformer (
   def transform(fd: s.FunDef): t.FunDef = {
     new t.FunDef(
       transform(fd.id, initEnv),
-      Seq(), //fd.tparams map (transform(_, initEnv)),
+      Seq(),
       fd.params map (transform(_, initEnv)),
       transform(fd.returnType, initEnv),
       transform(fd.fullBody, initEnv),
@@ -156,8 +153,8 @@ private [wasmgen] class ExprTransformer (
         // TODO: Represent mathematical integers adequately
         t.Int64Literal(
           if (value.isValidLong) value.toLong
-          else if (value > Int.MaxValue) Int.MaxValue
-          else Int.MinValue
+          else if (value > Long.MaxValue) Long.MaxValue
+          else Long.MinValue
         )
 
       // Misc.
@@ -561,8 +558,8 @@ private [wasmgen] class ExprTransformer (
 class Lowering extends inox.transformers.SymbolTransformer with Transformer {
   private val sortCodes = new inox.utils.UniqueCounter[Unit]
   locally {
-    // We want to reserve the first 6 codes for native types
-    for {_ <- 0 to 5} sortCodes.nextGlobal
+    // We want to reserve the first codes for native types
+    for {_ <- 0 to trees.lastReservedTag} sortCodes.nextGlobal
   }
 
   def transform(sort: s.ADTSort, env: Env): Seq[t.RecordSort] = {
@@ -591,7 +588,8 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
         case Seq(arg) =>
           val fields = constr.typed(tps).fields
           val name = if (sort.id.name matches "_Tuple\\d{1,2}_") "" else constr.id.name
-          (
+          if (fields.isEmpty) StringLiteral(name + "()")
+          else (
             StringLiteral(name + "(") +:
             fields.zipWithIndex.flatMap { case (f, ind) =>
               val fieldStr = FunctionInvocation(fun("_toString_").id, Seq(f.getType), Seq(ADTSelector(arg, f.id)))
@@ -625,8 +623,9 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    ret.records foreach (r => println(r._2.asString))
-    ret.functions foreach (r => println(r._2.asString))
+    //implicit val printerOptions = t.PrinterOptions(printUniqueIds = true)
+    //ret.records foreach (r => println(r._2.asString))
+    //ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
     //println(ret)
 

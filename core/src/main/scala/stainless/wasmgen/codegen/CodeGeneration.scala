@@ -6,11 +6,13 @@ package codegen
 
 import intermediate.{trees => t}
 import wasm._
-import Expressions.{eq => EQ, _}
+import Expressions.{eq => EQ, _} // The compiler somehow gets confused with Any.eq
 import Types._
 import Definitions._
 
 trait CodeGeneration {
+
+  /* Environments */
   protected case class FunEnv(
     s: t.Symbols,
     gh: GlobalsHandler,
@@ -29,20 +31,30 @@ trait CodeGeneration {
     def fEnv = FunEnv(s, gh, dh, tab)
   }
 
-  protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
-
+  /* Generate parts of the module */
   protected def mkImports(symbols: t.Symbols): Seq[Import] = {
     Seq(Import("system", "printString", FunSig("_printString_", Seq(i32), void)))
   }
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
+  /* Called after the functions are created to update the initial values of the globals */
   protected def updateGlobals(env: FunEnv): Unit
   protected def mkTable(s: t.Symbols): Table
-  /** Built-in functions */
+  protected def mkBuiltins(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): Seq[FunDef] = {
+    Seq(
+      mkMain(s, toExecute),
+      mkEquality(s), mkInequality(s),
+      mkFloatToSign(f32), mkFloatToSign(f64),
+      mkToString(s), mkf32ToString, mkStringConcat, mkSubstring
+    )
+  }
+
+  /* Built-in functions */
   protected val stringConcatName = "_string_concat_"
   protected val substringName = "_substring_"
   protected val refEqualityName = "_ref_eq_"
   protected val refInequalityName = "_ref_ineq_"
   protected val refToStringName = "_ref_toString_"
+  protected def floatToSignName(tpe: Type) = s"_${tpe}_sign_"
   protected def toStringName(name: String)(implicit funEnv: FunEnv): String = {
     val fullName = s"_${name}ToString_"
     try {
@@ -50,16 +62,6 @@ trait CodeGeneration {
     } catch {
       case _: t.FunctionLookupException => fullName
     }
-  }
-  protected def arrayCopyName(tpe: Type) = s"_array_copy_${tpe}_"
-  protected def mkEquality(s: t.Symbols): FunDef
-  protected def mkInequality(s: t.Symbols): FunDef
-  protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
-  protected def mkStringConcat(implicit funEnv: FunEnv): FunDef
-  protected def mkSubstring(implicit funEnv: FunEnv): FunDef
-  private val mkf32ToString = FunDef("_f32ToString_", Seq(ValDef("arg", f32)), i32) { _ => Unreachable }
-  protected def mkBuiltins(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): Seq[FunDef] = {
-    Seq(mkMain(s, toExecute), mkEquality(s), mkInequality(s), mkToString(s), mkf32ToString, mkStringConcat, mkSubstring)
   }
   private def mkMain(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): FunDef = {
     FunDef("_main_", Seq(), void) { lh =>
@@ -72,16 +74,38 @@ trait CodeGeneration {
       ))(funEnv.env(lh))
     }
   }
+  protected def arrayCopyName(tpe: Type) = s"_array_copy_${tpe}_"
+  protected def mkEquality(s: t.Symbols): FunDef
+  protected def mkInequality(s: t.Symbols): FunDef
+  protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
+  protected def mkStringConcat(implicit funEnv: FunEnv): FunDef
+  protected def mkSubstring(implicit funEnv: FunEnv): FunDef
+  private val mkf32ToString = {
+    FunDef("_f32ToString_", Seq(ValDef("arg", f32)), i32) { _ => Unreachable }
+  }
+  private def mkFloatToSign(tpe: Type) = {
+    require(tpe == f32 || tpe == f64)
+    FunDef(floatToSignName(tpe), Seq(ValDef("lhs", tpe), ValDef("rhs", tpe)), i32) { implicit lh =>
+      val lhs = GetLocal("lhs")
+      val rhs = GetLocal("rhs")
+      If(
+        freshLabel("label"),
+        gt(lhs, rhs),
+        I32Const(1),
+        If(
+          freshLabel("label"),
+          lt(lhs, rhs),
+          I32Const(-1),
+          I32Const(0)
+        )
+      )
+    }
+  }
 
-  protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr
-  protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr
-  protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr
-  protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr
-  protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr
-  protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit env: Env): Expr
-  protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr
-  protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
-  protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
+  /* Helpers */
+
+  // Make fresh labels using stainless identifiers
+  protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
 
   final protected def typeToSign(tpe: t.Typed)(implicit s: t.Symbols): Sign = {
     tpe.getType match {
@@ -102,39 +126,6 @@ trait CodeGeneration {
     op(transform(lhs), transform(rhs))
   }
 
-  def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
-    case t.UnitType() => void
-    case t.BooleanType() => i32
-    case t.RealType() => f64
-    case t.BVType(_, size) => if (size == 64) i64 else i32
-    case t.ArrayType(_) | t.RecordType(_) | t.StringType() =>
-      sys.error("Reference types are left abstract " +
-        "and have to be implemented in a subclass of wasm CodeGeneration")
-  }
-
-  final def transform(s: t.Symbols, toExecute: Seq[Identifier]): Module = {
-    val imports = mkImports(s)
-    val globals = mkGlobals(s)
-    val tab = mkTable(s)
-    Module("program", imports, globals, tab){ (gh, dh) =>
-      implicit val funEnv = FunEnv(s, gh, dh, tab)
-      val funs = mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
-      updateGlobals(funEnv)
-      funs
-    }
-  }
-
-  final def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
-    implicit val s = env.s
-    FunDef(
-      fd.id.uniqueName,
-      fd.params.map(arg => ValDef(arg.id.uniqueName, transform(arg.tpe))),
-      transform(fd.returnType)
-    ) { lh =>
-      transform(fd.fullBody)(env.env(lh))
-    }
-  }
-
   final protected def surfaceEq(lhs: Expr, rhs: Expr, tpe: t.Type): Expr = {
     tpe match {
       case t.RecordType(_) =>
@@ -152,8 +143,10 @@ trait CodeGeneration {
     }
   final protected def baseTypeIneq(lhs: Expr, rhs: Expr): Expr =
     lhs.getType match {
-      case `f32` | `f64` =>
-        Truncate(i32, Signed, sub(lhs, rhs)) // FIXME!!!
+      case `f32` =>
+        Call(floatToSignName(f32), i32, Seq(lhs, rhs))
+      case `f64` =>
+        Call(floatToSignName(f64), i32, Seq(lhs, rhs))
       case `i64` =>
         Wrap(i32, sub(lhs, rhs))
       case `i32` =>
@@ -175,6 +168,45 @@ trait CodeGeneration {
     }
   }
 
+
+  /* Abstract expression constructors (related to ref. types) */
+  protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr
+  protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr
+  protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr
+  protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr
+  protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr
+  protected def mkNewArray(length: Expr, base: Type, init: Option[Expr])(implicit env: Env): Expr
+  protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr
+  protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
+  protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
+
+
+  /** Transform a stainless Symbols into a wasm Module */
+  final def transform(s: t.Symbols, toExecute: Seq[Identifier]): Module = {
+    val imports = mkImports(s)
+    val globals = mkGlobals(s)
+    val tab = mkTable(s)
+    Module("program", imports, globals, tab){ (gh, dh) =>
+      implicit val funEnv = FunEnv(s, gh, dh, tab)
+      val funs = mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
+      updateGlobals(funEnv)
+      funs
+    }
+  }
+
+  /** Transform a stainless FunDef to a wasm FunDef */
+  final def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
+    implicit val s = env.s
+    FunDef(
+      fd.id.uniqueName,
+      fd.params.map(arg => ValDef(arg.id.uniqueName, transform(arg.tpe))),
+      transform(fd.returnType)
+    ) { lh =>
+      transform(fd.fullBody)(env.env(lh))
+    }
+  }
+
+  /** Transform a stainless Expr into a wasm Expr */
   final def transform(expr: t.Expr)(implicit env: Env): Expr = {
     implicit val lh = env.lh
     implicit val s  = env.s
@@ -223,13 +255,13 @@ trait CodeGeneration {
       case t.StringLiteral(str) =>
         val length = str.length
         val mask = 0xFF
-        val l0 = (length & mask).toByte
-        val l1 = ((length >> 8) & mask).toByte
-        val l2 = ((length >> 16) & mask).toByte
-        val l3 = ((length >> 24) & mask).toByte
-        val lbytes = Seq(l0, l1, l2, l3)
-        val content = str.flatMap(char => Seq(char, 0, 0, 0).map(_.toByte))
-        I32Const(env.dh.addNext(lbytes ++ content))
+        val l0 = length & mask
+        val l1 = (length >> 8) & mask
+        val l2 = (length >> 16) & mask
+        val l3 = (length >> 24) & mask
+        val lbytes = Seq(l0, l1, l2, l3) // Little endian
+        val content = str.flatMap(char => Seq(char, 0, 0, 0))
+        I32Const(env.dh.addNext((lbytes ++ content).map(_.toByte)))
       case t.Record(tpe, fields) =>
         mkRecord(tpe, fields map transform)
       case rs@t.RecordSelector(record, selector) =>
@@ -323,6 +355,17 @@ trait CodeGeneration {
       case t.Not(expr) =>
         sub(I32Const(1), transform(expr))
     }
+  }
+
+  /** Transform a stainless type to a wasm type */
+  def transform(tpe: t.Type)(implicit s: t.Symbols): Type = tpe match {
+    case t.UnitType() => void
+    case t.BooleanType() => i32
+    case t.RealType() => f64
+    case t.BVType(_, size) => if (size == 64) i64 else i32
+    case t.ArrayType(_) | t.RecordType(_) | t.StringType() =>
+      sys.error("Reference types are left abstract " +
+        "and have to be implemented in a subclass of wasm CodeGeneration")
   }
 
 }

@@ -104,4 +104,6 @@ trait Definitions extends stainless.ast.Definitions { self: Trees =>
     case FunctionType(_, _) => 5
   }
 
+  val lastReservedTag: Int = typeToTag(FunctionType(Seq(), Untyped))
+
 }
