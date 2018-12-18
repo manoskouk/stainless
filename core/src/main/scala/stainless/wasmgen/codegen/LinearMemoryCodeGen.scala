@@ -69,7 +69,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
         boxedEq(i32)("function")(lhs, rhs)
       ) ++ {
         val sorts = s.records.values.toSeq.collect { case c: t.ConstructorSort => c }.sortBy(_.typeTag)
-        //assert(sorts.head.typeTag == 6)
         sorts map (s => recordEq(s)(lhs, rhs))
       }
     }
@@ -227,7 +226,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       val curr = lh.getFreshLocal(freshLabel("current"), i32)
       val loop = freshLabel("loop")
 
-      def indToPtr(e: Expr) = elemAddr(GetLocal("array"), e, i32)
+      def indToPtr(e: Expr) = elemAddr(GetLocal("array"), e)
 
       Sequence(Seq(
         SetLocal(ind, I32Const(0)),
@@ -267,8 +266,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
     }
   }
 
-
-  private def elemAddr(array: Expr, offset: Expr, tpe: Type) = add(array, mul(add(offset, I32Const(1)), I32Const(tpe.size)))
+  // Compute the address of an element in an array from base and offset
+  private def elemAddr(array: Expr, offset: Expr) = add(array, mul(add(offset, I32Const(1)), I32Const(4)))
 
   protected def mkSubstring(implicit funEnv: FunEnv): FunDef = {
     implicit val gh = funEnv.gh
@@ -289,8 +288,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Unsigned)(GetLocal(index), GetLocal(length)), // index < length
             Sequence(Seq(
               Store(None,
-                elemAddr(getMem, GetLocal(index), i32),
-                Load(i32, None, elemAddr(str, add(from, GetLocal(index)), i32))
+                elemAddr(getMem, GetLocal(index)),
+                Load(i32, None, elemAddr(str, add(from, GetLocal(index))))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
               Br(loop)
@@ -299,7 +298,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           )
         ),
         getMem, // Leave substring addr on the stack
-        setMem(elemAddr(getMem, GetLocal(length), i32))
+        setMem(elemAddr(getMem, GetLocal(length)))
       ))
     }
   }
@@ -323,8 +322,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Signed)(GetLocal(index), len1), // index < length
             Sequence(Seq(
               Store(None,
-                elemAddr(getMem, GetLocal(index), i32),
-                Load(i32, None, elemAddr(lhs, GetLocal(index), i32))
+                elemAddr(getMem, GetLocal(index)),
+                Load(i32, None, elemAddr(lhs, GetLocal(index)))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
               Br(loop)
@@ -339,8 +338,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Signed)(GetLocal(index), len2), // index < length
             Sequence(Seq(
               Store(None,
-                elemAddr(getMem, add(len1, GetLocal(index)), i32),
-                Load(i32, None, elemAddr(rhs, GetLocal(index), i32))
+                elemAddr(getMem, add(len1, GetLocal(index))),
+                Load(i32, None, elemAddr(rhs, GetLocal(index)))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
               Br(loop)
@@ -348,7 +347,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Nop
           )
         ),
-        setMem(elemAddr(getMem, add(len1, len2), i32))
+        setMem(elemAddr(getMem, add(len1, len2)))
       ))
     }
   }
@@ -432,43 +431,51 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkNewArray(length: Expr, init: Option[Expr])(implicit env: Env): Expr = {
     implicit val lh = env.lh
     implicit val gh = env.gh
-    val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
-    val len = lh.getFreshLocal(freshLabel("length"), i32)
-    val ind = lh.getFreshLocal(freshLabel("index"), i32)
-    val loop = freshLabel("loop")
+    val evLength = lh.getFreshLocal(freshLabel("length"), i32)
 
-    def indToPtr(e: Expr) = elemAddr(GetLocal(memCache), e, i32)
-
-    Sequence(Seq(
-      SetLocal(memCache, getMem),
-      SetLocal(len, length),
-      setMem(indToPtr(GetLocal(len))),
-      Store(None, GetLocal(memCache), GetLocal(len))
-    ) ++ (init match {
-      case Some(elem) =>
-        val initL = lh.getFreshLocal(freshLabel("init"), i32)
-        Seq(
-          SetLocal(ind, I32Const(0)),
-          SetLocal(initL, elem),
-          Block(loop, Sequence(Seq( // FIXME!!
-            Br_If(loop, ge(GetLocal(ind), GetLocal(len))),
-            Store(None, indToPtr(GetLocal(ind)), GetLocal(initL)),
-            SetLocal(ind, add(GetLocal(ind), I32Const(1)))
-          )))
-        )
-      case None =>
-        Seq()
-    }) ++ Seq(
-      GetLocal(memCache)
-    ))
+    Sequence(
+      Seq(
+        SetLocal(evLength, length),
+        Store(None, getMem, GetLocal(evLength))
+      ) ++ (init match {
+        case Some(elem) =>
+          val evInit = lh.getFreshLocal(freshLabel("init"), i32)
+          val ind = lh.getFreshLocal(freshLabel("index"), i32)
+          val loop = freshLabel("loop")
+          Seq(
+            SetLocal(ind, I32Const(0)),
+            SetLocal(evInit, elem),
+            Loop(loop, Sequence(Seq(
+              If(
+                freshLabel("label"),
+                lt(GetLocal(ind), GetLocal(evLength)),
+                Sequence(Seq(
+                  Store(None,
+                    elemAddr(getMem, GetLocal(ind)),
+                    GetLocal(evInit)
+                  ),
+                  SetLocal(ind, add(GetLocal(ind), I32Const(1))),
+                  Br(loop)
+                )),
+                Nop
+              )
+            )))
+          )
+        case None =>
+          Seq()
+      }) ++ Seq(
+        getMem,
+        setMem(elemAddr(getMem, GetLocal(evLength)))
+      )
+    )
   }
 
-  protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr = {
-    Load(base, None, elemAddr(array, index, base))
+  protected def mkArrayGet(array: Expr, index: Expr)(implicit env: Env): Expr = {
+    Load(i32, None, elemAddr(array, index))
   }
 
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr = {
-    Store(None, elemAddr(array, index, value.getType), value)
+    Store(None, elemAddr(array, index), value)
   }
 
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr = Load(i32, None, expr)

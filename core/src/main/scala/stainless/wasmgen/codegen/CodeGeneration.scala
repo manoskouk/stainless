@@ -183,7 +183,7 @@ trait CodeGeneration {
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr
   protected def mkNewArray(length: Expr, init: Option[Expr])(implicit env: Env): Expr
-  protected def mkArrayGet(array: Expr, base: Type, index: Expr)(implicit env: Env): Expr
+  protected def mkArrayGet(array: Expr, index: Expr)(implicit env: Env): Expr
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
 
@@ -302,7 +302,7 @@ trait CodeGeneration {
       case t.NewArray(length, init) =>
         mkNewArray(transform(length), init map transform)
       case ag@t.ArraySelect(array, index) =>
-        mkArrayGet(transform(array), transform(ag.getType), transform(index))
+        mkArrayGet(transform(array), transform(index))
       case t.ArraySet(array, index, value) =>
         mkArraySet(transform(array), transform(index), transform(value))
       case t.ArrayLength(array) =>
