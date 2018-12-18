@@ -84,6 +84,7 @@ trait CodeGeneration {
   protected def mkCharToString(implicit funEnv: FunEnv): FunDef
   protected def mkBigIntToString(implicit funEnv: FunEnv): FunDef
   protected def mkArrayToString(implicit funEnv: FunEnv): FunDef
+  protected def mkStringLiteral(s: String)(implicit env: Env): Expr
   protected def mkStringConcat(implicit funEnv: FunEnv): FunDef
   protected def mkSubstring(implicit funEnv: FunEnv): FunDef
   private def mkFloatToSign(tpe: Type) = {
@@ -260,15 +261,7 @@ trait CodeGeneration {
       case t.BooleanLiteral(value) =>
         I32Const(if (value) 1 else 0)
       case t.StringLiteral(str) =>
-        val length = str.length
-        val mask = 0xFF
-        val l0 = length & mask
-        val l1 = (length >> 8) & mask
-        val l2 = (length >> 16) & mask
-        val l3 = (length >> 24) & mask
-        val lbytes = Seq(l0, l1, l2, l3).map(_.toByte.r) // Little endian
-        val content = str.flatMap(char => Seq(char, 0, 0, 0).map(_.toByte.f))
-        I32Const(env.dh.addNext(lbytes ++ content))
+        mkStringLiteral(str)
       case t.CharLiteral(value) =>
         I32Const(value.toInt)
       case t.IntegerLiteral(value) =>

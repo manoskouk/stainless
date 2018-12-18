@@ -69,9 +69,9 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |      );
           |      var i = 0;
           |      var result = "";
-          |      while(i < 4 * len) {
+          |      while(i < len) {
           |        result += String.fromCharCode(bufView[arg+i+4]);
-          |        i = i + 4
+          |        i = i + 1
           |      }
           |      console.log(result);
           |    }

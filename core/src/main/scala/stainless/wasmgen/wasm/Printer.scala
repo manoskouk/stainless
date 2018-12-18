@@ -19,7 +19,8 @@ object Printer {
       Indented(doc(table)),
       Indented(Stacked(data map doc)),
       Indented(Stacked(functions map doc)),
-      ")"
+      ")",
+      ""
     )
   }
 
@@ -143,7 +144,7 @@ object Printer {
         )
       case Load(tpe, truncate, expr) =>
         val ts = truncate match {
-          case Some((tpe, sign)) => s"${tpe}_$sign"
+          case Some((tpe, sign)) => s"${tpe.bitSize}_$sign"
           case None => ""
         }
         Stacked(

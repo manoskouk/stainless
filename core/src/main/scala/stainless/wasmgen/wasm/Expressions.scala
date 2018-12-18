@@ -149,11 +149,11 @@ object Expressions { self =>
     val getType = void
   }
 
-  case class Load(tpe: Type, truncate: Option[(Type,Sign)], address: Expr) extends Expr {
-    val getType = truncate.map(_._1).getOrElse(tpe)
+  case class Load(tpe: Type, truncate: Option[(TruncType,Sign)], address: Expr) extends Expr {
+    val getType = tpe
   }
 
-  case class Store(truncate: Option[Type], address: Expr, value: Expr) extends Expr {
+  case class Store(truncate: Option[TruncType], address: Expr, value: Expr) extends Expr {
     val getType = void
   }
 

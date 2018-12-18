@@ -38,6 +38,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
   /* Helpers */
   // Compute the address of an element in an array from base and offset
   private def elemAddr(array: Expr, offset: Expr) = add(array, mul(add(offset, I32Const(1)), I32Const(4)))
+  private def strCharAddr(string: Expr, offset: Expr) = add(string, add(offset, I32Const(4)))
   private def unbox(tpe: Type, ref: Expr) = Load(tpe, None, add(ref, I32Const(4)))
 
   protected def mkEquality(s: t.Symbols): FunDef = {
@@ -161,7 +162,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
 
   protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef = {
-    //implicit val impS = s
 
     def boxedToString(tpe: Type, arg: Expr)(tpeName: String = tpe.toString): (Expr, String) =
       (Call(toStringName(tpeName), i32, Seq(unbox(tpe, arg))), tpeName)
@@ -269,6 +269,18 @@ object LinearMemoryCodeGen extends CodeGeneration {
     }
   }
 
+  protected def mkStringLiteral(str: String)(implicit env: Env): Expr = {
+    val length = str.length
+    val mask = 0xFF
+    val l0 = length & mask
+    val l1 = (length >> 8) & mask
+    val l2 = (length >> 16) & mask
+    val l3 = (length >> 24) & mask
+    val lbytes = Seq(l0, l1, l2, l3).map(_.toByte.r) // Little endian
+    val content = str.map(_.toByte.f)
+    I32Const(env.dh.addNext(lbytes ++ content))
+  }
+
   protected def mkSubstring(implicit funEnv: FunEnv): FunDef = {
     implicit val gh = funEnv.gh
     FunDef(substringName, Seq("string", "from", "to").map(ValDef(_, i32)), i32) { implicit lh =>
@@ -287,9 +299,9 @@ object LinearMemoryCodeGen extends CodeGeneration {
             freshLabel("label"),
             lt(Unsigned)(GetLocal(index), GetLocal(length)), // index < length
             Sequence(Seq(
-              Store(None,
-                elemAddr(getMem, GetLocal(index)),
-                Load(i32, None, elemAddr(str, add(from, GetLocal(index))))
+              Store(Some(i8),
+                strCharAddr(getMem, GetLocal(index)),
+                Load(i32, Some((i8, Unsigned)), strCharAddr(str, add(from, GetLocal(index))))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
               Br(loop)
@@ -298,7 +310,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           )
         ),
         getMem, // Leave substring addr on the stack
-        setMem(elemAddr(getMem, GetLocal(length)))
+        setMem(strCharAddr(getMem, GetLocal(length)))
       ))
     }
   }
@@ -320,9 +332,9 @@ object LinearMemoryCodeGen extends CodeGeneration {
             freshLabel("label"),
             lt(Signed)(GetLocal(index), len1), // index < length
             Sequence(Seq(
-              Store(None,
-                elemAddr(getMem, GetLocal(index)),
-                Load(i32, None, elemAddr(lhs, GetLocal(index)))
+              Store(Some(i8),
+                strCharAddr(getMem, GetLocal(index)),
+                Load(i32, Some((i8, Unsigned)), strCharAddr(lhs, GetLocal(index)))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
               Br(loop)
@@ -336,9 +348,9 @@ object LinearMemoryCodeGen extends CodeGeneration {
             freshLabel("label"),
             lt(Signed)(GetLocal(index), len2), // index < length
             Sequence(Seq(
-              Store(None,
-                elemAddr(getMem, add(len1, GetLocal(index))),
-                Load(i32, None, elemAddr(rhs, GetLocal(index)))
+              Store(Some(i8),
+                strCharAddr(getMem, add(len1, GetLocal(index))),
+                Load(i32, Some((i8, Unsigned)), strCharAddr(rhs, GetLocal(index)))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
               Br(loop)
@@ -347,7 +359,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           )
         ),
         getMem, // Leave concat addr on the stack
-        setMem(elemAddr(getMem, add(len1, len2)))
+        setMem(strCharAddr(getMem, add(len1, len2)))
       ))
     }
   }
