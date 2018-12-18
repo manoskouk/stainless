@@ -35,14 +35,18 @@ object LinearMemoryCodeGen extends CodeGeneration {
     s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
   )
 
+  /* Helpers */
+  // Compute the address of an element in an array from base and offset
+  private def elemAddr(array: Expr, offset: Expr) = add(array, mul(add(offset, I32Const(1)), I32Const(4)))
+  private def unbox(ref: Expr, tpe: Type) = Load(tpe, None, add(ref, I32Const(4)))
+
   protected def mkEquality(s: t.Symbols): FunDef = {
     implicit val impS = s
-    type BinContext = (Expr, Expr) => (Expr, String)
 
-    def boxedEq(tpe: Type)(name: String = tpe.toString): BinContext = (lhs, rhs) =>
+    def boxedEq(tpe: Type, lhs: Expr, rhs: Expr)(name: String = tpe.toString): (Expr, String) =
       (EQ(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
 
-    def recordEq(rec: t.RecordSort): BinContext = (lhs, rhs) => {
+    def recordEq(rec: t.RecordSort, lhs: Expr, rhs: Expr): (Expr, String) = {
       // We get offsets of all fields except first (typeTag) which we know is equal already
       val offsets = rec.allFields.scanLeft(0)((off, fld) => off + transform(fld.getType).size).tail
       val fieldEqs = rec.allFields.tail.zip(offsets).map { case (fld, off) =>
@@ -58,18 +62,18 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
     def allEqs(lhs: Expr, rhs: Expr): Seq[(Expr, String)] = {
       Seq(
-        boxedEq(i32)("boolean")(lhs, rhs),
-        boxedEq(i32)("char")(lhs, rhs),
-        boxedEq(i32)()(lhs, rhs),
-        boxedEq(i64)()(lhs, rhs),
-        boxedEq(i64)("BigInt")(lhs, rhs),
-        boxedEq(f64)()(lhs, rhs),
-        boxedEq(i32)("array")(lhs, rhs),
-        boxedEq(i32)("string")(lhs, rhs),
-        boxedEq(i32)("function")(lhs, rhs)
+        boxedEq(i32, lhs, rhs)("boolean"),
+        boxedEq(i32, lhs, rhs)("char"),
+        boxedEq(i32, lhs, rhs)(),
+        boxedEq(i64, lhs, rhs)(),
+        boxedEq(i64, lhs, rhs)("BigInt"),
+        boxedEq(f64, lhs, rhs)(),
+        boxedEq(i32, lhs, rhs)("array"),
+        boxedEq(i32, lhs, rhs)("string"),
+        boxedEq(i32, lhs, rhs)("function")
       ) ++ {
         val sorts = s.records.values.toSeq.collect { case c: t.ConstructorSort => c }.sortBy(_.typeTag)
-        sorts map (s => recordEq(s)(lhs, rhs))
+        sorts map (s => recordEq(s, lhs, rhs))
       }
     }
 
@@ -94,9 +98,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
 
   protected def mkInequality(s: t.Symbols): FunDef = {
     implicit val impS = s
-    type BinContext = (Expr, Expr) => (Expr, String)
 
-    def boxedIneq(tpe: Type, lhs: Expr, rhs: Expr)(name: String = tpe.toString)(implicit lh: LocalsHandler): (Expr, String) =
+    def boxedIneq(tpe: Type, lhs: Expr, rhs: Expr)(name: String = tpe.toString): (Expr, String) =
       (baseTypeIneq(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
 
     def recordIneq(rec: t.RecordSort, lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): (Expr, String) = {
@@ -265,9 +268,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
       ))
     }
   }
-
-  // Compute the address of an element in an array from base and offset
-  private def elemAddr(array: Expr, offset: Expr) = add(array, mul(add(offset, I32Const(1)), I32Const(4)))
 
   protected def mkSubstring(implicit funEnv: FunEnv): FunDef = {
     implicit val gh = funEnv.gh
