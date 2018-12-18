@@ -31,6 +31,9 @@ trait CodeGeneration {
     def fEnv = FunEnv(s, gh, dh, tab)
   }
 
+  // Make fresh labels using stainless identifiers
+  final protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
+
   /* Generate parts of the module */
   protected def mkImports(symbols: t.Symbols): Seq[Import] = {
     Seq(Import("system", "printString", FunSig("_printString_", Seq(i32), void)))
@@ -50,13 +53,14 @@ trait CodeGeneration {
   }
 
   /* Built-in functions */
-  protected val stringConcatName = "_string_concat_"
-  protected val substringName = "_substring_"
-  protected val refEqualityName = "_ref_eq_"
-  protected val refInequalityName = "_ref_ineq_"
-  protected val refToStringName = "_ref_toString_"
-  protected def floatToSignName(tpe: Type) = s"_${tpe}_sign_"
-  protected def toStringName(name: String)(implicit funEnv: FunEnv): String = {
+  final protected val stringConcatName = "_string_concat_"
+  final protected val substringName = "_substring_"
+  final protected val refEqualityName = "_ref_eq_"
+  final protected val refInequalityName = "_ref_ineq_"
+  final protected val refToStringName = "_ref_toString_"
+  final protected def arrayCopyName(tpe: Type) = s"_array_copy_${tpe}_"
+  final protected def floatToSignName(tpe: Type) = s"_${tpe}_sign_"
+  final protected def toStringName(name: String)(implicit funEnv: FunEnv): String = {
     val fullName = s"_${name}ToString_"
     try {
       funEnv.s.lookup[t.FunDef](fullName).id.uniqueName
@@ -64,29 +68,6 @@ trait CodeGeneration {
       case _: t.FunctionLookupException => fullName
     }
   }
-  private def mkMain(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): FunDef = {
-    FunDef("_main_", Seq(), void) { lh =>
-      transform(t.Sequence(
-        toExecute map { fid =>
-          t.Output(t.StringConcat(
-            t.StringLiteral(s"${fid.name} = "),
-            t.FunctionInvocation(s.lookup[t.FunDef]("_toString_").id, Seq(),
-              Seq(t.FunctionInvocation(fid, Seq(), Seq())))
-          ))
-        }
-      ))(funEnv.env(lh))
-    }
-  }
-  protected def arrayCopyName(tpe: Type) = s"_array_copy_${tpe}_"
-  protected def mkEquality(s: t.Symbols): FunDef
-  protected def mkInequality(s: t.Symbols): FunDef
-  protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
-  protected def mkCharToString(implicit funEnv: FunEnv): FunDef
-  protected def mkBigIntToString(implicit funEnv: FunEnv): FunDef
-  protected def mkArrayToString(implicit funEnv: FunEnv): FunDef
-  protected def mkStringLiteral(s: String)(implicit env: Env): Expr
-  protected def mkStringConcat(implicit funEnv: FunEnv): FunDef
-  protected def mkSubstring(implicit funEnv: FunEnv): FunDef
   private def mkFloatToSign(tpe: Type) = {
     require(tpe == f32 || tpe == f64)
     FunDef(floatToSignName(tpe), Seq(ValDef("lhs", tpe), ValDef("rhs", tpe)), i32) { implicit lh =>
@@ -105,11 +86,54 @@ trait CodeGeneration {
       )
     }
   }
+  private def mkMain(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): FunDef = {
+    FunDef("_main_", Seq(), void) { lh =>
+      transform(t.Sequence(
+        toExecute map { fid =>
+          t.Output(t.StringConcat(
+            t.StringLiteral(s"${fid.name} = "),
+            t.FunctionInvocation(s.lookup[t.FunDef]("_toString_").id, Seq(),
+              Seq(t.FunctionInvocation(fid, Seq(), Seq())))
+          ))
+        }
+      ))(funEnv.env(lh))
+    }
+  }
+  protected def mkEquality(s: t.Symbols): FunDef
+  protected def mkInequality(s: t.Symbols): FunDef
+  protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
+  protected def mkCharToString(implicit funEnv: FunEnv): FunDef
+  protected def mkBigIntToString(implicit funEnv: FunEnv): FunDef
+  protected def mkArrayToString(implicit funEnv: FunEnv): FunDef
+  protected def mkStringConcat(implicit funEnv: FunEnv): FunDef
+  protected def mkSubstring(implicit funEnv: FunEnv): FunDef
 
-  /* Helpers */
+  /** Transform a stainless Symbols into a wasm Module */
+  final def transform(s: t.Symbols, toExecute: Seq[Identifier]): Module = {
+    val imports = mkImports(s)
+    val globals = mkGlobals(s)
+    val tab = mkTable(s)
+    Module("program", imports, globals, tab){ (gh, dh) =>
+      implicit val funEnv = FunEnv(s, gh, dh, tab)
+      val funs = mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
+      updateGlobals(funEnv)
+      funs
+    }
+  }
 
-  // Make fresh labels using stainless identifiers
-  protected def freshLabel(s: String): String = FreshIdentifier(s).uniqueName
+  /** Transform a stainless FunDef to a wasm FunDef */
+  final def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
+    implicit val s = env.s
+    FunDef(
+      fd.id.uniqueName,
+      fd.params.map(arg => ValDef(arg.id.uniqueName, transform(arg.tpe))),
+      transform(fd.returnType)
+    ) { lh =>
+      transform(fd.fullBody)(env.env(lh))
+    }
+  }
+
+  /* Expr. Helpers */
 
   final protected def typeToSign(tpe: t.Typed)(implicit s: t.Symbols): Sign = {
     tpe.getType match {
@@ -178,7 +202,7 @@ trait CodeGeneration {
 
 
   /* Abstract expression constructors (related to ref. types) */
-  protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr
+  protected def mkRecord(recordType: t.RecordType, fields: Seq[Expr])(implicit env: Env): Expr
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr
   protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr
@@ -187,32 +211,7 @@ trait CodeGeneration {
   protected def mkArrayGet(array: Expr, index: Expr)(implicit env: Env): Expr
   protected def mkArraySet(array: Expr, index: Expr, value: Expr)(implicit env: Env): Expr
   protected def mkArrayLength(expr: Expr)(implicit env: Env): Expr
-
-
-  /** Transform a stainless Symbols into a wasm Module */
-  final def transform(s: t.Symbols, toExecute: Seq[Identifier]): Module = {
-    val imports = mkImports(s)
-    val globals = mkGlobals(s)
-    val tab = mkTable(s)
-    Module("program", imports, globals, tab){ (gh, dh) =>
-      implicit val funEnv = FunEnv(s, gh, dh, tab)
-      val funs = mkBuiltins(s, toExecute) ++ s.functions.values.toList.map(transform)
-      updateGlobals(funEnv)
-      funs
-    }
-  }
-
-  /** Transform a stainless FunDef to a wasm FunDef */
-  final def transform(fd: t.FunDef)(implicit env: FunEnv): FunDef = {
-    implicit val s = env.s
-    FunDef(
-      fd.id.uniqueName,
-      fd.params.map(arg => ValDef(arg.id.uniqueName, transform(arg.tpe))),
-      transform(fd.returnType)
-    ) { lh =>
-      transform(fd.fullBody)(env.env(lh))
-    }
-  }
+  protected def mkStringLiteral(s: String)(implicit env: Env): Expr
 
   /** Transform a stainless Expr into a wasm Expr */
   final def transform(expr: t.Expr)(implicit env: Env): Expr = {
@@ -249,8 +248,6 @@ trait CodeGeneration {
           transform(elze)
         )
       case t.Equals(lhs, rhs) =>
-        // Equality is value equality for non-reference types,
-        // but we have to invoke the reference equaliry implementation for ref. types
         surfaceEq(transform(lhs), transform(rhs), lhs.getType)
 
       case t.UnitLiteral() =>
@@ -373,7 +370,7 @@ trait CodeGeneration {
     case t.BooleanType() | t.CharType() => i32
     case t.IntegerType() => i64
     case t.RealType() => f64
-    case t.BVType(_, size) => if (size == 64) i64 else i32
+    case t.BVType(_, size) => if (size > 32) i64 else i32
     case t.ArrayType(_) | t.RecordType(_) | t.StringType() =>
       sys.error("Reference types are left abstract " +
         "and have to be implemented in a subclass of wasm CodeGeneration")

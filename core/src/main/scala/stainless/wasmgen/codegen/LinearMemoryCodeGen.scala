@@ -21,9 +21,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
   private def setMem(expr: Expr)(implicit gh: GlobalsHandler) =
     SetGlobal(memB, expr)
 
-  override protected def mkImports(s: t.Symbols) = Seq(
-    Import("system", "mem", Memory(100))
-  ) ++ super.mkImports(s)
+  override protected def mkImports(s: t.Symbols) =
+    Import("system", "mem", Memory(100)) +: super.mkImports(s)
 
   protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
 
@@ -364,17 +363,17 @@ object LinearMemoryCodeGen extends CodeGeneration {
     }
   }
 
-  protected def mkRecord(recordType: t.RecordType, exprs: Seq[Expr])(implicit env: Env): Expr = {
+  protected def mkRecord(recordType: t.RecordType, fields: Seq[Expr])(implicit env: Env): Expr = {
     implicit val gh = env.gh
     implicit val lh = env.lh
     // offsets for fields, with last element being the new memory boundary
-    val offsets = exprs.scanLeft(0)(_ + _.getType.size)
+    val offsets = fields.scanLeft(0)(_ + _.getType.size)
     val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
     Sequence(
       SetLocal(memCache, getMem) +:
       // Already set new memB because fields may also need new memory
       setMem(add(GetLocal(memCache), I32Const(offsets.last))) +:
-      exprs.zip(offsets).map { case (e, off) =>
+      fields.zip(offsets).map { case (e, off) =>
         Store(None, add(GetLocal(memCache), I32Const(off)), e)
       } :+
       GetLocal(memCache)

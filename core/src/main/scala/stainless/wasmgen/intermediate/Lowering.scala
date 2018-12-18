@@ -47,7 +47,7 @@ trait Transformer extends stainless.transformers.Transformer {
         RecordType(AnyRefSort.id)
 
       case s.ArrayType(base) =>
-        t.ArrayType(AnyRefType)
+        ArrayType(AnyRefType)
       // These remain the same
       // case s.Untyped =>
       // case s.RealType() => TODO: Represent Reals properly
