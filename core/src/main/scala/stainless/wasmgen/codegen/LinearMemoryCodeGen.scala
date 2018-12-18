@@ -38,13 +38,13 @@ object LinearMemoryCodeGen extends CodeGeneration {
   /* Helpers */
   // Compute the address of an element in an array from base and offset
   private def elemAddr(array: Expr, offset: Expr) = add(array, mul(add(offset, I32Const(1)), I32Const(4)))
-  private def unbox(ref: Expr, tpe: Type) = Load(tpe, None, add(ref, I32Const(4)))
+  private def unbox(tpe: Type, ref: Expr) = Load(tpe, None, add(ref, I32Const(4)))
 
   protected def mkEquality(s: t.Symbols): FunDef = {
     implicit val impS = s
 
     def boxedEq(tpe: Type, lhs: Expr, rhs: Expr)(name: String = tpe.toString): (Expr, String) =
-      (EQ(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
+      (EQ(unbox(tpe, lhs), unbox(tpe, rhs)), name)
 
     def recordEq(rec: t.RecordSort, lhs: Expr, rhs: Expr): (Expr, String) = {
       // We get offsets of all fields except first (typeTag) which we know is equal already
@@ -100,7 +100,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     implicit val impS = s
 
     def boxedIneq(tpe: Type, lhs: Expr, rhs: Expr)(name: String = tpe.toString): (Expr, String) =
-      (baseTypeIneq(Load(tpe, None, add(lhs, I32Const(4))), Load(tpe, None, add(rhs, I32Const(4)))), name)
+      (baseTypeIneq(unbox(tpe, lhs), unbox(tpe, rhs)), name)
 
     def recordIneq(rec: t.RecordSort, lhs: Expr, rhs: Expr, temp: String)(implicit lh: LocalsHandler): (Expr, String) = {
       // We get offsets of all fields except first (typeTag) which we know is equal already
@@ -164,7 +164,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     //implicit val impS = s
 
     def boxedToString(tpe: Type, arg: Expr)(tpeName: String = tpe.toString): (Expr, String) =
-      (Call(toStringName(tpeName), i32, Seq(Load(tpe, None, add(arg, I32Const(4))))), tpeName)
+      (Call(toStringName(tpeName), i32, Seq(unbox(tpe, arg))), tpeName)
 
     def recordToString(rec: t.ConstructorSort, arg: Expr): (Expr, String) = {
       (Call(toStringName(rec.id.uniqueName), i32, Seq(arg)), rec.id.uniqueName)
@@ -179,7 +179,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         boxedToString(i64, arg)("BigInt"),
         boxedToString(f64, arg)(),
         boxedToString(i32, arg)("array"),
-        (Load(i32, None, add(arg, I32Const(4))), "string"),
+        (unbox(i32, arg), "string"),
         (Call(toStringName("fun"), i32, Seq()), "function")
       ) ++ {
         val sorts = s.records.values.toSeq.collect { case c: t.ConstructorSort => c }.sortBy(_.typeTag)
@@ -313,7 +313,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
       val index = lh.getFreshLocal("index", i32)
       val loop = freshLabel("loop")
       Sequence(Seq(
-        GetGlobal(memB), // Leave concat addr on the stack
         Store(None, getMem, add(len1, len2)), // concat length
         SetLocal(index, I32Const(0)),
         Loop(loop,
@@ -347,6 +346,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Nop
           )
         ),
+        getMem, // Leave concat addr on the stack
         setMem(elemAddr(getMem, add(len1, len2)))
       ))
     }
@@ -360,14 +360,12 @@ object LinearMemoryCodeGen extends CodeGeneration {
     val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
     Sequence(
       SetLocal(memCache, getMem) +:
-        // Already set new memB because fields may also need new memory
-        setMem(add(GetLocal(memCache), I32Const(offsets.last))) +:
-        exprs
-          .zip(offsets)
-          .map { case (e, off) =>
-            Store(None, add(GetLocal(memCache), I32Const(off)), e)
-          } :+
-        GetLocal(memCache)
+      // Already set new memB because fields may also need new memory
+      setMem(add(GetLocal(memCache), I32Const(offsets.last))) +:
+      exprs.zip(offsets).map { case (e, off) =>
+        Store(None, add(GetLocal(memCache), I32Const(off)), e)
+      } :+
+      GetLocal(memCache)
     )
   }
 
@@ -379,10 +377,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
       .takeWhile(_.id != id)
       .map(fd => transform(fd.getType).size)
       .sum
-    Load(
-      tpe, None,
-      add(expr, I32Const(sizeBefore))
-    )
+    Load(tpe, None, add(expr, I32Const(sizeBefore)))
   }
 
   protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr = {
@@ -405,23 +400,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Unreachable
           )
         ))
-      /*case rs: t.RecordSort =>
-        val tags = s.records.collect{ case (_, cs: t.ConstructorSort) if cs.parent contains id  => cs.typeTag }
-        if (tags.isEmpty) I32Const(0)
-        else {
-          Sequence(Seq(
-            SetLocal(temp, expr),
-            If(
-              freshLabel("label"),
-              tags map (t => EQ(Load(i32, None, GetLocal(temp)), I32Const(t))) reduceRight or.apply,
-              GetLocal(temp),
-              Unreachable
-            )
-          ))
-
-        }*/
-
-      case _ => expr // Our translation ensures by construction that we cannot fail when casting anything else
+      // Our translation ensures by construction that we cannot fail when casting anything else
+      case _ => expr
     }
   }
 

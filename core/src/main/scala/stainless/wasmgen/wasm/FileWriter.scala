@@ -57,11 +57,7 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |  system: {
           |    mem: memory,
           |
-          |    printInt: function(arg) {
-          |      console.log(arg);
-          |      0;
-          |    },
-          |
+          |    // Reads a string from linear memory and prints it to the console
           |    printString: function(arg) {
           |      var bufView = new Uint8Array(memory.buffer);
           |      var len = (

@@ -74,15 +74,13 @@ class WasmDependenciesFinder extends DependenciesFinder {
   val t: stainless.trees.type = stainless.trees
   def traverser(s: Symbols): DefinitionIdFinder { val trees: t.type } = new WasmDefIdFinder(s)
 
-
-  // Always add the internal _List_ sort
   override def findDependencies(roots: Set[Identifier], s: Symbols): Symbols = {
     def fun(name: String) = s.lookup[FunDef](name)
-    def sort(name: String) = s.lookup[ADTSort](name)
     super.findDependencies(roots, s)
       .withFunctions(Seq(
-        "_toString_", "_digitToStringL_", "_digitToStringI_", "_i32ToString_", "_i64ToString_",
-        "_f64ToString_", "_booleanToString_", "_funToString_"
+        "_toString_", "_digitToStringL_", "_digitToStringI_",
+        "_i32ToString_", "_i64ToString_", "_f64ToString_",
+        "_booleanToString_", "_funToString_"
       ).map(fun))
   }
 }
