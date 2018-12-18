@@ -60,11 +60,12 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
           |    // Reads a string from linear memory and prints it to the console
           |    printString: function(arg) {
           |      var bufView = new Uint8Array(memory.buffer);
+          |      // Reconstruct 32-bit integer length from 4 first bytes in little endian
           |      var len = (
           |        bufView[arg] +
-          |        bufView[arg+1] * 0xFF +
-          |        bufView[arg+2] * 0xFFFF +
-          |        bufView[arg+3] * 0xFFFFFF
+          |        bufView[arg+1] * 0x100 +
+          |        bufView[arg+2] * 0x10000 +
+          |        bufView[arg+3] * 0x1000000
           |      );
           |      var i = 0;
           |      var result = "";
