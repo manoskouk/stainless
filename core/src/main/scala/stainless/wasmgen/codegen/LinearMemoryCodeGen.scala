@@ -18,8 +18,9 @@ import wasm.Definitions._
 object LinearMemoryCodeGen extends CodeGeneration {
   private val memB = "memB"
   private def getMem(implicit gh: GlobalsHandler) = GetGlobal(memB)
-  private def setMem(expr: Expr)(implicit gh: GlobalsHandler) =
-    SetGlobal(memB, expr)
+  private def malloc(size: Expr)(implicit gh: GlobalsHandler) = {
+    SetGlobal(memB, add(getMem, size))
+  }
 
   override protected def mkImports(s: t.Symbols): Seq[Import] =
     Import("system", "mem", Memory(100)) +: super.mkImports(s)
@@ -199,7 +200,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         getMem,
         Store(None, getMem, I32Const(1)),
         Store(None, add(getMem, I32Const(4)), GetLocal("arg")),
-        setMem(add(getMem, I32Const(8)))
+        malloc(I32Const(8))
       ))
     }
   }
@@ -305,7 +306,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           )
         ),
         getMem, // Leave substring addr on the stack
-        setMem(strCharAddr(getMem, GetLocal(length)))
+        malloc(add(GetLocal(length), I32Const(4)))
       ))
     }
   }
@@ -354,7 +355,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           )
         ),
         getMem, // Leave concat addr on the stack
-        setMem(strCharAddr(getMem, add(len1, len2)))
+        malloc(add(add(len1, len2), I32Const(4)))
       ))
     }
   }
@@ -368,7 +369,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     Sequence(
       SetLocal(memCache, getMem) +:
       // Already set new memB because fields may also need new memory
-      setMem(add(GetLocal(memCache), I32Const(offsets.last))) +:
+      malloc(I32Const(offsets.last)) +:
       fields.zip(offsets).map { case (e, off) =>
         Store(None, add(GetLocal(memCache), I32Const(off)), e)
       } :+
@@ -447,7 +448,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
         )
       } ++ Seq(
         getMem,
-        setMem(elemAddr(getMem, GetLocal(evLength)))
+        malloc(mul(add(GetLocal(evLength), I32Const(1)), I32Const(4)))
       )
     )
   }
