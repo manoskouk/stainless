@@ -1,4 +1,4 @@
-package stainless.runtime
+package stainless.wasm
 
 import stainless.lang._
 import stainless.annotation.library
@@ -7,7 +7,7 @@ import stainless.annotation.library
   * as well as set, map and bag operations on top of sorted lists
   */
 @library
-object DataStructures {
+object Runtime {
 
   sealed case class _Tuple2_[T1, T2](e1: T1, e2: T2)
   sealed case class _Tuple3_[T1, T2, T3](e1: T1, e2: T2, e3: T3)
