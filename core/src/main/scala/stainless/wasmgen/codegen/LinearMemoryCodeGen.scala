@@ -30,10 +30,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
     funEnv.gh.update(memB, I32Const(funEnv.dh.nextFree))
   }
 
-  protected def mkTable(s: t.Symbols) = Table(
-    s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
-  )
-
   /* Helpers */
   // Compute the address of an element in an array from base and offset
   private def elemAddr(array: Expr, offset: Expr) = add(array, mul(add(offset, I32Const(1)), I32Const(4)))
@@ -390,11 +386,6 @@ object LinearMemoryCodeGen extends CodeGeneration {
       .sum
     Load(tpe, None, add(expr, I32Const(offset)))
   }
-
-  protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr = {
-    I32Const(env.tab.indexOf(id.uniqueName))
-  }
-
 
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr = {
     implicit val lh = env.lh

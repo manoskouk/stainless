@@ -41,7 +41,9 @@ trait CodeGeneration {
   protected def mkGlobals(s: t.Symbols): Seq[ValDef]
   /* Called after the functions are created to update the initial values of the globals */
   protected def updateGlobals(env: FunEnv): Unit
-  protected def mkTable(s: t.Symbols): Table
+  protected def mkTable(s: t.Symbols) = Table(
+    s.functions.values.toList.filter(_.flags.contains(t.Dynamic)).map(_.id.uniqueName)
+  )
   protected def mkBuiltins(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): Seq[FunDef] = {
     Seq(
       mkMain(s, toExecute),
@@ -205,7 +207,6 @@ trait CodeGeneration {
   /* Abstract expression constructors (related to ref. types) */
   protected def mkRecord(recordType: t.RecordType, fields: Seq[Expr])(implicit env: Env): Expr
   protected def mkRecordSelector(expr: Expr, rt: t.RecordType, id: Identifier)(implicit env: Env): Expr
-  protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr
   protected def mkCastUp(expr: Expr, superType: t.RecordType)(implicit env: Env): Expr
   protected def mkNewArray(length: Expr, init: Option[Expr])(implicit env: Env): Expr
@@ -222,12 +223,11 @@ trait CodeGeneration {
       case t.NoTree(tpe) =>
         Unreachable
       case t.Variable(id, tpe, flags) =>
-        val toLook = id.uniqueName
-        GetLocal(toLook)
+        GetLocal(id.uniqueName)
       case t.Let(vd, value, body) =>
-        lh.getFreshLocal(vd.id.uniqueName, transform(vd.getType))
+        val local = lh.getFreshLocal(vd.id.uniqueName, transform(vd.getType))
         Sequence(Seq(
-          SetLocal(vd.id.uniqueName, transform(value)),
+          SetLocal(local, transform(value)),
           transform(body)
         ))
       case t.Output(msg) =>
@@ -279,7 +279,7 @@ trait CodeGeneration {
         mkRecordSelector(transform(record), rt, selector)
 
       case t.FunctionPointer(id) =>
-        mkFunctionPointer(id)
+        I32Const(env.tab.indexOf(id.uniqueName))
       case t.Application(callee, args) =>
         Call_Indirect(
           transform(callee.getType.asInstanceOf[t.FunctionType].to),
@@ -374,6 +374,7 @@ trait CodeGeneration {
     case t.IntegerType() => i64
     case t.RealType() => f64
     case t.BVType(_, size) => if (size > 32) i64 else i32
+    case t.FunctionType(_, _) => i32
     case t.ArrayType(_) | t.RecordType(_) | t.StringType() =>
       sys.error("Reference types are left abstract " +
         "and have to be implemented in a subclass of wasm CodeGeneration")
