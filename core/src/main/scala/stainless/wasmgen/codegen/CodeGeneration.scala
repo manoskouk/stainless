@@ -6,7 +6,7 @@ package codegen
 
 import intermediate.{trees => t}
 import wasm._
-import Expressions.{eq => EQ, _} // The compiler somehow gets confused with Any.eq
+import Expressions.{eq => EQ, _} // Conflict with AnyRef.eq
 import Types._
 import Definitions._
 
@@ -99,6 +99,7 @@ trait CodeGeneration {
       ))(funEnv.env(lh))
     }
   }
+  /* Abstract builtins (related to ref. types) */
   protected def mkEquality(s: t.Symbols): FunDef
   protected def mkInequality(s: t.Symbols): FunDef
   protected def mkToString(s: t.Symbols)(implicit funEnv: FunEnv): FunDef
