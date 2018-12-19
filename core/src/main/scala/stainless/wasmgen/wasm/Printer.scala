@@ -117,13 +117,13 @@ object Printer {
           ")"
         )
       case Br(label) => s"(br $$$label)"
-      case Br_If(label, cond) =>
+      case BrIf(label, cond) =>
         Stacked(
           s"(br_if $$$label",
           Indented(doc(cond)),
           ")"
         )
-      case Br_Table(labels, default, index, body) =>
+      case BrTable(labels, default, index, body) =>
         Stacked(
           s"(br_table ${(labels:+default) map ("$" + _ ) mkString " "}",
           Indented(doc(index)),
@@ -136,7 +136,7 @@ object Printer {
           Indented(Stacked(args map doc: _*)),
           ")"
         )
-      case Call_Indirect(_, fun, args) =>
+      case CallIndirect(_, fun, args) =>
         Stacked(
           s"(call_indirect (param ${args.map(_.getType).mkString(" ")}) (result ${expr.getType})",
           Indented(Stacked( (args :+ fun) map doc: _*)), // It think function goes last

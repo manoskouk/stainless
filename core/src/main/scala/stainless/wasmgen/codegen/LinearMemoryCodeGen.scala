@@ -81,7 +81,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           EQ(Load(i32, None, GetLocal("lhs")), Load(i32, None, GetLocal("rhs"))), {
             val eqs = allEqs(GetLocal("lhs"), GetLocal("rhs"))
             // We use i32 as default, whatever, should not happen
-            val jump = Br_Table(eqs.map(_._2), eqs.head._2, Load(i32, None, GetLocal("lhs")), None)
+            val jump = BrTable(eqs.map(_._2), eqs.head._2, Load(i32, None, GetLocal("lhs")), None)
             eqs.foldLeft(jump: Expr) { case (first, (equality, label)) =>
               Sequence(Seq(Block(label, first), Return(equality)))
             }
@@ -144,7 +144,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           eqz(GetLocal(temp)), {
             val ineqs = allIneqs(GetLocal("lhs"), GetLocal("rhs"), temp)
             // We use i32 as default, whatever, should not happen
-            val jump = Br_Table(ineqs.map(_._2), ineqs.head._2, Load(i32, None, GetLocal("lhs")), None)
+            val jump = BrTable(ineqs.map(_._2), ineqs.head._2, Load(i32, None, GetLocal("lhs")), None)
             ineqs.foldLeft(jump: Expr) { case (first, (ineq, label)) =>
               Sequence(Seq(Block(label, first), Return(ineq)))
             }
@@ -186,7 +186,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
     FunDef(refToStringName, Seq(ValDef("arg", i32)), i32) { implicit lh =>
       val toStrings = allToStrings(GetLocal("arg"))
       // We use i32 as default, whatever, should not happen
-      val jump = Br_Table(toStrings.map(_._2), toStrings(2)._2, Load(i32, None, GetLocal("arg")), None)
+      val jump = BrTable(toStrings.map(_._2), toStrings(2)._2, Load(i32, None, GetLocal("arg")), None)
       toStrings.foldLeft(jump: Expr) { case (first, (toS, label)) =>
         Sequence(Seq(Block(label, first), Return(toS)))
       }

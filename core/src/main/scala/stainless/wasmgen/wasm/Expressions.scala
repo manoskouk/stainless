@@ -120,11 +120,11 @@ object Expressions { self =>
     val getType = void
   }
 
-  case class Br_If(label: Label, cond: Expr) extends Expr {
+  case class BrIf(label: Label, cond: Expr) extends Expr {
     val getType = void
   }
 
-  case class Br_Table(labels: Seq[Label], default: Label, index: Expr, body: Option[Expr]) extends Expr {
+  case class BrTable(labels: Seq[Label], default: Label, index: Expr, body: Option[Expr]) extends Expr {
     val getType = body.map(_.getType).getOrElse(void)
   }
 
@@ -132,7 +132,7 @@ object Expressions { self =>
     val getType = tpe
   }
 
-  case class Call_Indirect(tpe: Type, func: Expr, args: Seq[Expr]) extends Expr {
+  case class CallIndirect(tpe: Type, func: Expr, args: Seq[Expr]) extends Expr {
     val getType = tpe
   }
 
@@ -182,7 +182,7 @@ object Expressions { self =>
   }
 
   // Helpers
-  def typeToZero(tpe: Type): Const = tpe match {
+  def zero(tpe: Type): Const = tpe match {
     case `i32` => I32Const(0)
     case `i64` => I64Const(0)
     case `f32` => F32Const(0)

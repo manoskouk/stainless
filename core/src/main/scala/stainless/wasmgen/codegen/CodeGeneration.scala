@@ -281,7 +281,7 @@ trait CodeGeneration {
       case t.FunctionPointer(id) =>
         I32Const(env.tab.indexOf(id.uniqueName))
       case t.Application(callee, args) =>
-        Call_Indirect(
+        CallIndirect(
           transform(callee.getType.asInstanceOf[t.FunctionType].to),
           transform(callee),
           args map transform
@@ -324,7 +324,7 @@ trait CodeGeneration {
         e.getType match {
           case t.RealType() => Unary(neg, transform(e))
           case tpe =>
-            Binary(sub, typeToZero(transform(tpe)), transform(e))
+            Binary(sub, zero(transform(tpe)), transform(e))
         }
       case t.LessThan(lhs, rhs) =>
         mkBin(typeToOp(lhs, lt(_), lt), lhs, rhs)
@@ -336,7 +336,7 @@ trait CodeGeneration {
         mkBin(typeToOp(lhs, ge(_), ge), lhs, rhs)
 
       case t.BVNot(e) =>
-        xor(typeToZero(transform(e.getType)), transform(e))
+        xor(zero(transform(e.getType)), transform(e))
       case t.BVAnd(lhs, rhs) =>
         mkBin(and, lhs, rhs)
       case t.BVOr(lhs, rhs) =>

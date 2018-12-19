@@ -5,7 +5,7 @@ package wasmgen
 package wasm
 
 import Definitions._
-import Expressions.typeToZero
+import Expressions.zero
 
 // A WebAssembly module
 case class Module private (
@@ -21,7 +21,7 @@ object Module {
   def apply(name: Label, imports: Seq[Import], globals: Seq[ValDef], table: Table)
            (funGen: (GlobalsHandler, DataHandler) => Seq[FunDef]): Module = {
     val gh = new GlobalsHandler(
-      globals.map(g => Global(g.name, true, typeToZero(g.tpe)))
+      globals.map(g => Global(g.name, true, zero(g.tpe)))
     )
     val dh = new DataHandler(0)
     val funs = funGen(gh, dh)
