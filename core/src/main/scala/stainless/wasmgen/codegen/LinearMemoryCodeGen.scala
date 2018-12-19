@@ -384,11 +384,11 @@ object LinearMemoryCodeGen extends CodeGeneration {
     implicit val s = env.s
     val fields = rt.getRecord.allFields
     val tpe = transform(fields.find(_.id == id).get.getType)
-    val sizeBefore = fields
+    val offset = fields
       .takeWhile(_.id != id)
       .map(fd => transform(fd.getType).size)
       .sum
-    Load(tpe, None, add(expr, I32Const(sizeBefore)))
+    Load(tpe, None, add(expr, I32Const(offset)))
   }
 
   protected def mkFunctionPointer(id: Identifier)(implicit env: Env): Expr = {

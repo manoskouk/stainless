@@ -612,9 +612,10 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
       funs ++ manager.functions
     )
 
-    implicit val printerOptions = t.PrinterOptions(printUniqueIds = true)
-    ret.records foreach (r => println(r._2.asString))
-    ret.functions foreach (r => println(r._2.asString))
+    //Debugging
+    //implicit val printerOptions = t.PrinterOptions(printUniqueIds = true)
+    //ret.records foreach (r => println(r._2.asString))
+    //ret.functions foreach (r => println(r._2.asString))
     //ret.functions.foreach(fn => println(ret.explainTyping(fn._2.fullBody)))
 
     ret

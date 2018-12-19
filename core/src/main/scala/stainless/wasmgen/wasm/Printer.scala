@@ -26,7 +26,7 @@ object Printer {
 
   private def doc(g: Global): Document = {
     val tpe = if(g.isMutable) s"(mut ${g.tpe})" else g.tpe.toString
-    Lined(Seq(s"(global $$${g.name} $tpe ", doc(g.init), ")"))
+    s"(global $$${g.name} $tpe " <:> doc(g.init) <:> ")"
   }
 
   private def doc(data: Data): Document = {
@@ -50,7 +50,7 @@ object Printer {
       case Memory(size) =>
         s"(memory $size)"
     }
-    Lined(Seq(s"""(import "$extModule" "$name" """, typeDoc, ")"))
+    s"""(import "$extModule" "$name" """ <:> typeDoc <:> ")"
   }
 
   private def doc(fh: FunDef): Document = {
@@ -68,7 +68,7 @@ object Printer {
 
     Stacked(
       exportDoc,
-      Lined(Seq(s"(func $$$name ", paramsDoc, resultDoc, localsDoc)),
+      s"(func $$$name " <:> paramsDoc <:> resultDoc <:> localsDoc,
       Indented(Stacked(doc(body))),
       ")"
     )

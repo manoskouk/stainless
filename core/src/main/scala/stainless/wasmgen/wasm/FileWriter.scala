@@ -6,7 +6,7 @@ import java.io.{IOException, File, FileWriter => JFW}
 import scala.sys.process._
 import inox.Context
 
-class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
+class FileWriter(context: Context, module: Module) {
   object Env {
     trait OS
     object Linux extends OS
@@ -29,6 +29,7 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
     val fw = new JFW(new File(fileName))
     fw.write(Printer(module))
     fw.flush()
+    fw.close()
   }
 
   def writeNodejsWrapper(fileName: String, moduleFile: String): Unit = {
@@ -89,9 +90,10 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
     val fw = new JFW(new File(fileName))
     fw.write(wrapperString)
     fw.flush()
+    fw.close()
   }
 
-  def writeFiles() = {
+  def writeFiles(): (String, String) = {
     val outDirName = "wasmout"
 
     def withExt(ext: String) = s"$outDirName/${module.name}.$ext"
@@ -135,6 +137,7 @@ class FileWriter(context: Context, module: Module, toExecute: Set[String]) {
 
     writeNodejsWrapper(withExt("js"), withExt("wasm"))
 
+    (withExt("wasm"), withExt("js"))
   }
 
 }
