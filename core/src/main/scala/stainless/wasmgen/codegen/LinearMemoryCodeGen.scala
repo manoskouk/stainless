@@ -21,7 +21,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
   private def setMem(expr: Expr)(implicit gh: GlobalsHandler) =
     SetGlobal(memB, expr)
 
-  override protected def mkImports(s: t.Symbols) =
+  override protected def mkImports(s: t.Symbols): Seq[Import] =
     Import("system", "mem", Memory(100)) +: super.mkImports(s)
 
   protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
@@ -414,38 +414,38 @@ object LinearMemoryCodeGen extends CodeGeneration {
     implicit val lh = env.lh
     implicit val gh = env.gh
     val evLength = lh.getFreshLocal(freshLabel("length"), i32)
+    val evInit = lh.getFreshLocal(freshLabel("init"), i32)
 
     Sequence(
+      init.toSeq.map { elem =>
+        SetLocal(evInit, elem)
+      } ++
       Seq(
         SetLocal(evLength, length),
         Store(None, getMem, GetLocal(evLength))
-      ) ++ (init match {
-        case Some(elem) =>
-          val evInit = lh.getFreshLocal(freshLabel("init"), i32)
-          val ind = lh.getFreshLocal(freshLabel("index"), i32)
-          val loop = freshLabel("loop")
-          Seq(
-            SetLocal(ind, I32Const(0)),
-            SetLocal(evInit, elem),
-            Loop(loop, Sequence(Seq(
-              If(
-                freshLabel("label"),
-                lt(GetLocal(ind), GetLocal(evLength)),
-                Sequence(Seq(
-                  Store(None,
-                    elemAddr(getMem, GetLocal(ind)),
-                    GetLocal(evInit)
-                  ),
-                  SetLocal(ind, add(GetLocal(ind), I32Const(1))),
-                  Br(loop)
-                )),
-                Nop
-              )
-            )))
-          )
-        case None =>
-          Seq()
-      }) ++ Seq(
+      ) ++
+      init.toSeq.flatMap { elem =>
+        val ind = lh.getFreshLocal(freshLabel("index"), i32)
+        val loop = freshLabel("loop")
+        Seq(
+          SetLocal(ind, I32Const(0)),
+          Loop(loop, Sequence(Seq(
+            If(
+              freshLabel("label"),
+              lt(GetLocal(ind), GetLocal(evLength)),
+              Sequence(Seq(
+                Store(None,
+                  elemAddr(getMem, GetLocal(ind)),
+                  GetLocal(evInit)
+                ),
+                SetLocal(ind, add(GetLocal(ind), I32Const(1))),
+                Br(loop)
+              )),
+              Nop
+            )
+          )))
+        )
+      } ++ Seq(
         getMem,
         setMem(elemAddr(getMem, GetLocal(evLength)))
       )
