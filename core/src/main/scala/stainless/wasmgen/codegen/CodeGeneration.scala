@@ -269,6 +269,8 @@ trait CodeGeneration {
           else if (value > Long.MaxValue) Long.MaxValue
           else Long.MinValue
         )
+      case t.FractionLiteral(numerator, denominator) =>
+        F64Const((BigDecimal(numerator) / BigDecimal(denominator)).toDouble)
 
       case t.Record(tpe, fields) =>
         mkRecord(tpe, fields map transform)
