@@ -81,8 +81,11 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
   sealed case class NewArray(length: Expr, init: Option[Expr]) extends Expr {
     def getType(implicit s: Symbols) =
-      if (length.getType == Int32Type()) ArrayType(AnyRefType)
-      else Untyped
+      checkParamTypes(
+        Seq(length) ++ init.toSeq,
+        Seq(Int32Type()) ++ init.toSeq.map(_ => AnyRefType),
+        ArrayType(AnyRefType)
+      )
   }
 
   sealed case class ArraySet(array: Expr, index: Expr, value: Expr) extends Expr {

@@ -5,7 +5,7 @@ package codegen
 
 import stainless.Identifier
 import intermediate.{trees => t}
-import wasm.{GlobalsHandler, LocalsHandler}
+import wasm.LocalsHandler
 import wasm.Expressions.{eq => EQ, _}
 import wasm.Types._
 import wasm.Definitions._
@@ -17,18 +17,58 @@ import wasm.Definitions._
   */
 object LinearMemoryCodeGen extends CodeGeneration {
   private val memB = "memB"
-  private def getMem(implicit gh: GlobalsHandler) = GetGlobal(memB)
-  private def malloc(size: Expr)(implicit gh: GlobalsHandler) = {
-    SetGlobal(memB, add(getMem, size))
+  private val mallocName = "_malloc_"
+  // Checks if we can allocate a given number of bytes in memory.
+  // If not, tries to grow the memory and fails if it is impossible.
+  // Then allocates bytes and returns the **previous** free memory boundary
+  private def mkMalloc(implicit funEnv: FunEnv) = {
+    val pageShift = I32Const(16) // 64K
+    FunDef(mallocName, Seq(ValDef("size", i32)), i32) { implicit lh =>
+      implicit val env = funEnv.env(lh)
+      implicit val gh = env.gh
+      val getMem = GetGlobal(memB)
+      val size = GetLocal("size")
+      val loop = freshLabel("loop")
+      Sequence(Seq(Loop(loop,
+        If(
+          freshLabel("label"),
+          gt(Unsigned)(
+            add(getMem, size),
+            shl(MemorySize, pageShift)
+          ),
+          If(
+            freshLabel("label"),
+            Sequence(Seq(
+              EQ(MemoryGrow(MemorySize), I32Const(-1)), // Double current mem.size
+              Call("_printString_", void, Seq(Call(toStringName("i32"), i32, Seq(MemorySize))))
+            )),
+            Sequence(Seq(
+              transform(t.Output(t.StringLiteral("Error: Out of memory"))),
+              Unreachable
+            )),
+            Br(loop)
+          ),
+          Return(Sequence(Seq(
+            getMem,
+            SetGlobal(memB, add(getMem, size))
+          )))
+        )
+      ), I32Const(0))) // bogus, to satisfy the type checker
+    }
   }
+  private def malloc(size: Expr) = Call(mallocName, i32, Seq(size))
 
   override protected def mkImports(s: t.Symbols): Seq[Import] =
-    Import("system", "mem", Memory(100)) +: super.mkImports(s)
+    Import("system", "mem", Memory(1)) +: super.mkImports(s)
 
   protected def mkGlobals(s: t.Symbols) = Seq(ValDef(memB, i32))
 
   protected def updateGlobals(funEnv: FunEnv): Unit = {
     funEnv.gh.update(memB, I32Const(funEnv.dh.nextFree))
+  }
+
+  override def mkBuiltins(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): Seq[FunDef] = {
+    super.mkBuiltins(s, toExecute) :+ mkMalloc
   }
 
   /* Helpers */
@@ -196,11 +236,12 @@ object LinearMemoryCodeGen extends CodeGeneration {
   protected def mkCharToString(implicit funEnv: FunEnv): FunDef = {
     implicit val gh = funEnv.gh
     FunDef(toStringName("char"), Seq(ValDef("arg", i32)), i32){ implicit lh =>
+      val mem = lh.getFreshLocal("mem", i32)
       Sequence(Seq(
-        getMem,
-        Store(None, getMem, I32Const(1)),
-        Store(None, add(getMem, I32Const(4)), GetLocal("arg")),
-        malloc(I32Const(8))
+        SetLocal(mem, malloc(I32Const(8))),
+        Store(None, GetLocal(mem), I32Const(1)),
+        Store(None, add(GetLocal(mem), I32Const(4)), GetLocal("arg")),
+        GetLocal(mem)
       ))
     }
   }
@@ -286,9 +327,11 @@ object LinearMemoryCodeGen extends CodeGeneration {
       val index = lh.getFreshLocal("index", i32)
       val length = lh.getFreshLocal("length", i32)
       val loop = freshLabel("loop")
+      val mem = lh.getFreshLocal("mem", i32)
       Sequence(Seq(
         SetLocal(length, sub(to, from)),
-        Store(None, getMem, GetLocal(length)),
+        SetLocal(mem, malloc(add(GetLocal(length), I32Const(4)))),
+        Store(None, GetLocal(mem), GetLocal(length)),
         SetLocal(index, I32Const(0)),
         Loop(loop,
           If(
@@ -296,7 +339,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Unsigned)(GetLocal(index), GetLocal(length)), // index < length
             Sequence(Seq(
               Store(Some(i8),
-                strCharAddr(getMem, GetLocal(index)),
+                strCharAddr(GetLocal(mem), GetLocal(index)),
                 Load(i32, Some((i8, Unsigned)), strCharAddr(str, add(from, GetLocal(index))))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
@@ -305,8 +348,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Nop
           )
         ),
-        getMem, // Leave substring addr on the stack
-        malloc(add(GetLocal(length), I32Const(4)))
+        GetLocal(mem)
       ))
     }
   }
@@ -319,9 +361,11 @@ object LinearMemoryCodeGen extends CodeGeneration {
       val len1 = Load(i32, None, lhs)
       val len2 = Load(i32, None, rhs)
       val index = lh.getFreshLocal("index", i32)
+      val mem = lh.getFreshLocal("mem", i32)
       val loop = freshLabel("loop")
       Sequence(Seq(
-        Store(None, getMem, add(len1, len2)), // concat length
+        SetLocal(mem, malloc(add(add(len1, len2), I32Const(4)))),
+        Store(None, GetLocal(mem), add(len1, len2)), // concat length
         SetLocal(index, I32Const(0)),
         Loop(loop,
           If(
@@ -329,7 +373,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Signed)(GetLocal(index), len1), // index < length
             Sequence(Seq(
               Store(Some(i8),
-                strCharAddr(getMem, GetLocal(index)),
+                strCharAddr(GetLocal(mem), GetLocal(index)),
                 Load(i32, Some((i8, Unsigned)), strCharAddr(lhs, GetLocal(index)))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
@@ -345,7 +389,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             lt(Signed)(GetLocal(index), len2), // index < length
             Sequence(Seq(
               Store(Some(i8),
-                strCharAddr(getMem, add(len1, GetLocal(index))),
+                strCharAddr(GetLocal(mem), add(len1, GetLocal(index))),
                 Load(i32, Some((i8, Unsigned)), strCharAddr(rhs, GetLocal(index)))
               ),
               SetLocal(index, add(GetLocal(index), I32Const(1))),
@@ -354,8 +398,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
             Nop
           )
         ),
-        getMem, // Leave concat addr on the stack
-        malloc(add(add(len1, len2), I32Const(4)))
+        GetLocal(mem)
       ))
     }
   }
@@ -365,15 +408,13 @@ object LinearMemoryCodeGen extends CodeGeneration {
     implicit val lh = env.lh
     // offsets for fields, with last element being the new memory boundary
     val offsets = fields.scanLeft(0)(_ + _.getType.size)
-    val memCache = lh.getFreshLocal(freshLabel("mem"), i32)
+    val mem = lh.getFreshLocal(freshLabel("mem"), i32)
     Sequence(
-      SetLocal(memCache, getMem) +:
-      // Already set new memB because fields may also need new memory
-      malloc(I32Const(offsets.last)) +:
+      SetLocal(mem, malloc(I32Const(offsets.last))) +:
       fields.zip(offsets).map { case (e, off) =>
-        Store(None, add(GetLocal(memCache), I32Const(off)), e)
+        Store(None, add(GetLocal(mem), I32Const(off)), e)
       } :+
-      GetLocal(memCache)
+      GetLocal(mem)
     )
   }
 
@@ -416,27 +457,27 @@ object LinearMemoryCodeGen extends CodeGeneration {
     implicit val gh = env.gh
     val evLength = lh.getFreshLocal(freshLabel("length"), i32)
     val evInit = lh.getFreshLocal(freshLabel("init"), i32)
+    val mem = lh.getFreshLocal("mem", i32)
 
     Sequence(
-      init.toSeq.map { elem =>
-        SetLocal(evInit, elem)
-      } ++
       Seq(
         SetLocal(evLength, length),
-        Store(None, getMem, GetLocal(evLength))
+        SetLocal(mem, malloc(mul(add(GetLocal(evLength), I32Const(1)), I32Const(4)))),
+        Store(None, GetLocal(mem), GetLocal(evLength))
       ) ++
       init.toSeq.flatMap { elem =>
         val ind = lh.getFreshLocal(freshLabel("index"), i32)
         val loop = freshLabel("loop")
         Seq(
+          SetLocal(evInit, elem),
           SetLocal(ind, I32Const(0)),
           Loop(loop, Sequence(Seq(
             If(
               freshLabel("label"),
-              lt(GetLocal(ind), GetLocal(evLength)),
+              lt(Signed)(GetLocal(ind), GetLocal(evLength)),
               Sequence(Seq(
                 Store(None,
-                  elemAddr(getMem, GetLocal(ind)),
+                  elemAddr(GetLocal(mem), GetLocal(ind)),
                   GetLocal(evInit)
                 ),
                 SetLocal(ind, add(GetLocal(ind), I32Const(1))),
@@ -446,10 +487,8 @@ object LinearMemoryCodeGen extends CodeGeneration {
             )
           )))
         )
-      } ++ Seq(
-        getMem,
-        malloc(mul(add(GetLocal(evLength), I32Const(1)), I32Const(4)))
-      )
+      } ++
+      Seq(GetLocal(mem))
     )
   }
 

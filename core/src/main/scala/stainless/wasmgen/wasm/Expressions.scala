@@ -157,6 +157,14 @@ object Expressions { self =>
     val getType = void
   }
 
+  case object MemorySize extends Expr {
+    val getType = i32
+  }
+
+  case class MemoryGrow(size: Expr) extends Expr {
+    val getType: Type = i32
+  }
+
   // Variable instructions
   case class GetLocal(label: Label)(implicit lh: LocalsHandler) extends Expr {
     val getType = lh.getType(label)

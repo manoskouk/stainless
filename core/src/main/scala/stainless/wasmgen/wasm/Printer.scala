@@ -160,6 +160,14 @@ object Printer {
           Indented(doc(value)),
           ")"
         )
+      case MemorySize =>
+        "(memory.size)"
+      case MemoryGrow(size) =>
+        Stacked(
+          "(memory.grow",
+          Indented(doc(size)),
+          ")"
+        )
       case Return(value) =>
         Stacked(
           "(return",

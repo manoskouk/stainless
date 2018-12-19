@@ -334,7 +334,7 @@ private [wasmgen] class ExprTransformer (
       case s.LargeArray(elems, default, size, base) =>
         val arr = Variable.fresh("array", ArrayType(AnyRefType))
         Let(arr.toVal,
-          NewArray(transform(size, env), Some(transform(default, env))),
+          NewArray(transform(size, env), Some(maybeBox(default, AnyRefType, env))),
           Sequence( elems.toSeq.sortBy(_._1).map { case (index, elem) =>
             ArraySet(arr, Int32Literal(index), maybeBox(elem, AnyRefType, env))
           } :+ arr)
