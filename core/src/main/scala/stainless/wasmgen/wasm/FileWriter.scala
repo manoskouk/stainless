@@ -6,7 +6,7 @@ import java.io.{IOException, File, FileWriter => JFW}
 import scala.sys.process._
 import inox.Context
 
-class FileWriter(context: Context, module: Module) {
+class FileWriter(module: Module, context: Context) {
   object Env {
     trait OS
     object Linux extends OS

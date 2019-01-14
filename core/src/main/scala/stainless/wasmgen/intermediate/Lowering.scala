@@ -4,6 +4,7 @@ package stainless.wasmgen
 package intermediate
 
 import stainless.{FreshIdentifier, Identifier}
+import inox.Context
 
 trait Transformer extends stainless.transformers.Transformer {
   val s = stainless.trees
@@ -100,7 +101,8 @@ private [wasmgen] class ExprTransformer (
   manager: SymbolsManager,
   keepContracts: Boolean,
   sym0: stainless.trees.Symbols,
-  initSorts: Map[Identifier, trees.RecordSort]
+  initSorts: Map[Identifier, trees.RecordSort],
+  context: Context
 ) extends Transformer {
   import t._
   def initEnv = (sym0, manager)
@@ -490,9 +492,14 @@ private [wasmgen] class ExprTransformer (
         )
 
       // We do not translate these for now
-      case s.Forall(params, body) => ???
-      case s.Choose(res, pred) => ???
-      case s.GenericValue(tp, id) => ???
+      case s.Forall(_, _)
+         | s.Choose(_, _)
+         | s.GenericValue(_, _) =>
+        context.reporter.fatalError(
+          s"Cannot translate expression " +
+          e.asString(s.PrinterOptions.fromContext(context, Some(env._1))) +
+          " to WebAssembly."
+        )
 
       // These should all be the same:
       // ** All other literals **
@@ -542,7 +549,7 @@ private [wasmgen] class ExprTransformer (
   * - Reals are not translated (later are approximated as Doubles)
   * - ArrayUpdated does not copy, rather it does a destructive update
   */
-class Lowering extends inox.transformers.SymbolTransformer with Transformer {
+class Lowering(context: Context) extends inox.transformers.SymbolTransformer with Transformer {
   private val sortCodes = new inox.utils.UniqueCounter[Unit]
   locally {
     // We want to reserve the first codes for native types
@@ -603,7 +610,7 @@ class Lowering extends inox.transformers.SymbolTransformer with Transformer {
     val initSymbols = t.NoSymbols.withRecords(syms.sorts.values.toSeq.flatMap(transform(_, env0)))
 
     // (2) Transform functions in program
-    val tr = new ExprTransformer(manager, keepContracts = true, syms, initSymbols.records)
+    val tr = new ExprTransformer(manager, keepContracts = true, syms, initSymbols.records, context)
     val funs = (syms.functions mapValues tr.transform).view.force
 
     // (3) Put it all together

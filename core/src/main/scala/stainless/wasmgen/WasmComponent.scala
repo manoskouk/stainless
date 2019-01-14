@@ -59,8 +59,8 @@ class WasmComponentRun(override val pipeline: StainlessPipeline)
 
   private[stainless] def execute(functions: Seq[Identifier], symbols: trees.Symbols): Future[WasmAnalysis] = {
     Future.successful {
-      val module = codegen.LinearMemoryCodeGen.transform((new intermediate.Lowering).transform(symbols), functions)
-      val (wasmFile, nodeJsFile) = new wasm.FileWriter(context, module).writeFiles()
+      val module = codegen.LinearMemoryCodeGen.transform(new intermediate.Lowering(context).transform(symbols), functions)
+      val (wasmFile, nodeJsFile) = new wasm.FileWriter(module, context).writeFiles()
       context.reporter.info(s"WebAssembly binary file $wasmFile was generated.")
       context.reporter.info(s"Javascript wrapper file $nodeJsFile was generated.")
       new WasmAnalysis
