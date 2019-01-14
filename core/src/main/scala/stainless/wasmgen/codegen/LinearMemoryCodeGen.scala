@@ -5,7 +5,7 @@ package codegen
 
 import stainless.Identifier
 import intermediate.{trees => t}
-import wasm.LocalsHandler
+import wasm.{GlobalsHandler, LocalsHandler}
 import wasm.Expressions.{eq => EQ, _}
 import wasm.Types._
 import wasm.Definitions._
@@ -17,6 +17,7 @@ import wasm.Definitions._
   */
 object LinearMemoryCodeGen extends CodeGeneration {
   private val memB = "memB"
+  private val safeMem: Boolean = true
   private val mallocName = "_malloc_"
   // Checks if we can allocate a given number of bytes in memory.
   // If not, tries to grow the memory and fails if it is impossible.
@@ -38,10 +39,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
           ),
           If(
             freshLabel("label"),
-            Sequence(Seq(
-              EQ(MemoryGrow(MemorySize), I32Const(-1)), // Double current mem.size
-              Call("_printString_", void, Seq(Call(toStringName("i32"), i32, Seq(MemorySize))))
-            )),
+            EQ(MemoryGrow(MemorySize), I32Const(-1)),
             Sequence(Seq(
               transform(t.Output(t.StringLiteral("Error: Out of memory"))),
               Unreachable
@@ -56,7 +54,13 @@ object LinearMemoryCodeGen extends CodeGeneration {
       ), I32Const(0))) // bogus, to satisfy the type checker
     }
   }
-  private def malloc(size: Expr) = Call(mallocName, i32, Seq(size))
+  private def malloc(size: Expr)(implicit gh: GlobalsHandler) = {
+    if (safeMem) Call(mallocName, i32, Seq(size))
+    else Sequence(Seq(
+      GetGlobal(memB),
+      SetGlobal(memB, add(GetGlobal(memB), size))
+    ))
+  }
 
   override protected def mkImports(s: t.Symbols): Seq[Import] =
     Import("system", "mem", Memory(1)) +: super.mkImports(s)
@@ -68,7 +72,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
   }
 
   override def mkBuiltins(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): Seq[FunDef] = {
-    super.mkBuiltins(s, toExecute) :+ mkMalloc
+    super.mkBuiltins(s, toExecute) ++ (if (safeMem) Seq(mkMalloc) else Seq())
   }
 
   /* Helpers */
