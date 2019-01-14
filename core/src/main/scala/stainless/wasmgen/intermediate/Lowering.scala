@@ -3,8 +3,8 @@
 package stainless.wasmgen
 package intermediate
 
-import stainless.{FreshIdentifier, Identifier}
 import inox.Context
+import stainless.{FreshIdentifier, Identifier}
 
 trait Transformer extends stainless.transformers.Transformer {
   val s = stainless.trees
@@ -598,15 +598,18 @@ class Lowering(context: Context) extends inox.transformers.SymbolTransformer wit
 
   def transform(syms0: s.Symbols): t.Symbols = {
 
-    // (0) Make toString's
-    val toStrings = syms0.sorts.toSeq.flatMap(_._2.constructors).filterNot( constr =>
-      Set("_SCons_", "_SNil_", "_MCons_", "_MNil_", "_BCons_", "_BNil_") contains constr.id.name
-    ).map(mkToString(_)(syms0))
+    // (0) Make toString's and inject assertions
+    val toStrings = {
+      val hasBuiltinToString = Set("_SCons_", "_SNil_", "_MCons_", "_MNil_", "_BCons_", "_BNil_")
+      syms0.sorts.toSeq.flatMap(_._2.constructors).filterNot( constr =>
+        hasBuiltinToString contains constr.id.name
+      ).map(mkToString(_)(syms0))
+    }
     val syms = syms0.withFunctions(toStrings)
-    val manager = new SymbolsManager
-    val env0 = (syms, manager)
 
     // (1) Transform sorts, make them to starting symbols
+    val manager = new SymbolsManager
+    val env0 = (syms, manager)
     val initSymbols = t.NoSymbols.withRecords(syms.sorts.values.toSeq.flatMap(transform(_, env0)))
 
     // (2) Transform functions in program
