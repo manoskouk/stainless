@@ -179,7 +179,7 @@ private [wasmgen] class ExprLowerer(
               transform(as.getType, env),
               env
             ),
-            transform(s.Error(as.getType, s"Cannot cast to ${childId.name}"), env) ) )
+            transform(s.Error(as.getType, s"Error: Cannot cast to ${childId.name}"), env) ) )
       } else {
         maybeUnbox(
           RecordSelector(
@@ -350,7 +350,7 @@ private [wasmgen] class ExprLowerer(
               IfExpr(
                 FunctionInvocation(inv.id, Seq(), Seq(binder.toVariable)),
                 binder.toVariable,
-                transform(s.Error(adt.getType, s"Invariant failed for ${adt.getConstructor.sort.id}"), env))
+                transform(s.Error(adt.getType, s"Error: Invariant failed for ${adt.getConstructor.sort.id}"), env))
             )
           case _ =>
             withoutInv
@@ -412,7 +412,7 @@ private [wasmgen] class ExprLowerer(
                   ArraySet(arr, ind, maybeBox(value, AnyRefType, env)),
                   arr
                 )),
-                transform(s.Error(array.getType, "Array out of bounds"), env) )))
+                transform(s.Error(array.getType, "Error: Array out of bounds"), env) )))
         } else {
           Let(arr.toVal, transform(array, env),
             Sequence(Seq(
@@ -429,7 +429,7 @@ private [wasmgen] class ExprLowerer(
               IfExpr(
                 inBounds(arr, ind),
                 ArraySelect(arr, ind),
-                transform(s.Error(array.getType, "Array out of bounds"), env) )))
+                transform(s.Error(array.getType, "Error: Array out of bounds"), env) )))
         } else {
           maybeUnbox(
             ArraySelect(transform(array, env), transform(index, env)),
