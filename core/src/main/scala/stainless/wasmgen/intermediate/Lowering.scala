@@ -10,21 +10,20 @@ trait Lowerer extends stainless.transformers.Transformer {
   val s = stainless.trees
   val t = trees
 
-  type Env = (s.Symbols, SymbolsManager)
+  case class Env(syms: s.Symbols, manager: SymbolsManager, generateChecks: Boolean)
 
   protected def sort(name: String)(implicit sym: s.Symbols) = sym.lookup[s.ADTSort](name)
   protected def fun (name: String)(implicit sym: s.Symbols) = sym.lookup[s.FunDef](name)
 
   override def transform(tp: s.Type, env: Env): t.Type = {
-    implicit val impSyms = env._1
+    implicit val impSyms = env.syms
     import t._
     tp match {
-
       case s.ADTType(id, tps) =>
         RecordType(id)
 
       case s.FunctionType(from, to) =>
-        RecordType(env._2.funPointerSort(
+        RecordType(env.manager.funPointerSort(
           FunctionType(Seq.fill(from.size)(AnyRefType), AnyRefType)
         ))
 
@@ -99,13 +98,12 @@ private[wasmgen] class SymbolsManager {
 
 private [wasmgen] class ExprLowerer(
   manager: SymbolsManager,
-  keepContracts: Boolean,
   sym0: stainless.trees.Symbols,
   initSorts: Map[Identifier, trees.RecordSort],
   context: Context
 ) extends Lowerer {
   import t._
-  def initEnv = (sym0, manager)
+  def initEnv = Env(sym0, manager, true)
 
   private def isRecordType(tpe: t.Type) = tpe match {
     case t.RecordType(_) => true
@@ -113,14 +111,13 @@ private [wasmgen] class ExprLowerer(
   }
 
   private def maybeBox(e: s.Expr, expected: t.Type, env: Env): t.Expr = {
-    implicit val impSyms = env._1
-    val manager = env._2
+    implicit val impSyms = env.syms
     val trType = transform(e.getType, env)
     val trE = transform(e, env)
     if (!isRecordType(trType) && expected == AnyRefType)
       CastUp(
         Record(
-          RecordType(manager.boxedSort(trType)),
+          RecordType(env.manager.boxedSort(trType)),
           Seq(Int32Literal(typeToTag(trType)), trE)),
         AnyRefType
       )
@@ -128,8 +125,7 @@ private [wasmgen] class ExprLowerer(
     else CastUp(trE, AnyRefType)
   }
   private def maybeUnbox(e: t.Expr, real: t.Type, expected: t.Type, env: Env): t.Expr = {
-    implicit val impSyms = env._1
-    val mangage = env._2
+    implicit val impSyms = env.syms
     if (!isRecordType(expected) && real == AnyRefType)
       RecordSelector(
         CastDown(e, RecordType(manager.boxedSort(expected))),
@@ -151,47 +147,8 @@ private [wasmgen] class ExprLowerer(
   }
 
   override def transform(e: s.Expr, env: Env): Expr = {
-    implicit val impSyms = env._1
-
-    def transformSelector(as: s.ADTSelector, checkConstructor: Boolean) = {
-      val s.ADTSelector(adt, selector) = as
-      val s.ADTType(parent, tps) = adt.getType
-      val (childId, formalType) = (for {
-        ch <- initSorts.values
-        if ch.parent.contains(parent)
-        fd <- ch.fields
-        if fd.id == selector
-      } yield (ch.id, fd.tpe)).head
-      if (checkConstructor) {
-        val binder = ValDef(FreshIdentifier(childId.name.toLowerCase), RecordType(parent))
-        Let(binder, transform(adt, env),
-          IfExpr(
-            Equals(
-              RecordSelector(binder.toVariable, typeTagID),
-              Int32Literal(initSorts(childId).asInstanceOf[ConstructorSort].typeTag)
-            ),
-            maybeUnbox(
-              RecordSelector(
-                CastDown(binder.toVariable, RecordType(childId)),
-                selector
-              ),
-              formalType,
-              transform(as.getType, env),
-              env
-            ),
-            transform(s.Error(as.getType, s"Error: Cannot cast to ${childId.name}"), env) ) )
-      } else {
-        maybeUnbox(
-          RecordSelector(
-            CastDown(transform(adt, env), RecordType(childId)),
-            selector
-          ),
-          formalType,
-          transform(as.getType, env),
-          env
-        )
-      }
-    }
+    implicit val impSyms = env.syms
+    val generateChecks = env.generateChecks
 
     def inBounds(array: t.Expr, index: t.Expr) = {
       And(
@@ -202,6 +159,11 @@ private [wasmgen] class ExprLowerer(
 
     e match {
       // Misc.
+      case s.Annotated(body, flags) if flags contains s.Unchecked =>
+        // Unchecked flag suppresses checks
+        transform(body, env.copy(generateChecks = false))
+      case s.Annotated(body, _) =>
+        transform(body, env)
       case s.Error(tpe, description) =>
         Sequence(Seq(
           Output(transform(s.StringLiteral(description), env)),
@@ -210,14 +172,14 @@ private [wasmgen] class ExprLowerer(
 
       // Contracts
       case s.Assume(pred, body) =>
-        if (keepContracts)
+        if (generateChecks)
           IfExpr(transform(pred, env), transform(body, env), NoTree(transform(body.getType, env)))
         else
           transform(body, env)
       case s.Require(pred, body) =>
         transform(s.Assume(pred, body), env)
       case s.Ensuring(body, s.Lambda(Seq(vd), lbody)) =>
-        if (keepContracts) {
+        if (generateChecks) {
           val trV = transform(vd, env)
           Let(trV, transform(body, env),
             IfExpr(transform(lbody, env), trV.toVariable, NoTree(trV.tpe))
@@ -226,7 +188,7 @@ private [wasmgen] class ExprLowerer(
           transform(body, env)
         }
       case s.Assert(pred, error, body) =>
-        if (keepContracts)
+        if (generateChecks)
           IfExpr(
             transform(pred, env),
             transform(body, env),
@@ -321,14 +283,7 @@ private [wasmgen] class ExprLowerer(
 
       // ADTs
       case me: s.MatchExpr =>
-        // We get hacky here: We annotate all selectors that are not going to be generated
-        // by this matchToIfThenElse with Unchecked, so later we can recover that we have to insert safety checks for them
-        val annotatedME = s.exprOps.preMap{
-          case sel: s.ADTSelector => Some(s.Annotated(sel, Seq(s.Unchecked)))
-          case _ => None
-        }(me)
-        val ite = impSyms.matchToIfThenElse(annotatedME, assumeExhaustive = false)
-        transform(ite, env)
+        transform(impSyms.matchToIfThenElse(me, assumeExhaustive = !generateChecks), env)
       case adt@s.ADT(id, tps, args) =>
         // Except constructor fields, we also store the i32 tag corresponding to this constructor
         val typeTag = initSorts(id).asInstanceOf[ConstructorSort].typeTag
@@ -343,7 +298,7 @@ private [wasmgen] class ExprLowerer(
           parentType
         )
         invariant match {
-          case Some(inv) if keepContracts =>
+          case Some(inv) if generateChecks =>
             val binder = ValDef(FreshIdentifier(id.name.toLowerCase), parentType)
             Let(
               binder, withoutInv,
@@ -362,12 +317,43 @@ private [wasmgen] class ExprLowerer(
           RecordSelector(transform(expr, env), typeTagID),
           Int32Literal(initSorts(id).asInstanceOf[ConstructorSort].typeTag)
         )
-      // We have to insert safety check if:
-      // the selector was not generated by a matchToIfThenElse AND keepContracts is true
-      case s.Annotated(as@s.ADTSelector(adt, selector), flags) if flags contains s.Unchecked =>
-        transformSelector(as, checkConstructor = keepContracts)
       case as@s.ADTSelector(adt, selector) =>
-        transformSelector(as, checkConstructor = false)
+        val s.ADTType(parent, tps) = adt.getType
+        val (childId, formalType) = (for {
+          ch <- initSorts.values
+          if ch.parent.contains(parent)
+          fd <- ch.fields
+          if fd.id == selector
+        } yield (ch.id, fd.tpe)).head
+        if (generateChecks) {
+          val binder = ValDef(FreshIdentifier(childId.name.toLowerCase), RecordType(parent))
+          Let(binder, transform(adt, env),
+            IfExpr(
+              Equals(
+                RecordSelector(binder.toVariable, typeTagID),
+                Int32Literal(initSorts(childId).asInstanceOf[ConstructorSort].typeTag)
+              ),
+              maybeUnbox(
+                RecordSelector(
+                  CastDown(binder.toVariable, RecordType(childId)),
+                  selector
+                ),
+                formalType,
+                transform(as.getType, env),
+                env
+              ),
+              transform(s.Error(as.getType, s"Error: Cannot cast to ${childId.name}"), env) ) )
+        } else {
+          maybeUnbox(
+            RecordSelector(
+              CastDown(transform(adt, env), RecordType(childId)),
+              selector
+            ),
+            formalType,
+            transform(as.getType, env),
+            env
+          )
+        }
 
       case s.FunctionInvocation(id, tps, args) =>
         val formals = sym0.functions(id).params.map(_.getType)
@@ -402,7 +388,7 @@ private [wasmgen] class ExprLowerer(
       case s.ArrayUpdated(array, index, value) =>
         // TODO: Copy functional arrays or analyze when we don't need to do so
         val arr = Variable.fresh("array", ArrayType(AnyRefType))
-        if (keepContracts) {
+        if (generateChecks) {
           val ind = Variable.fresh("index", Int32Type())
           Let(arr.toVal, transform(array, env),
             Let(ind.toVal, transform(index, env),
@@ -421,15 +407,19 @@ private [wasmgen] class ExprLowerer(
             )))
         }
       case s.ArraySelect(array, index) =>
-        if (keepContracts) {
+        if (generateChecks) {
           val arr = Variable.fresh("array", ArrayType(AnyRefType))
           val ind = Variable.fresh("index", Int32Type())
           Let(arr.toVal, transform(array, env),
             Let(ind.toVal, transform(index, env),
               IfExpr(
                 inBounds(arr, ind),
-                ArraySelect(arr, ind),
-                transform(s.Error(array.getType, "Error: Array out of bounds"), env) )))
+                maybeUnbox(
+                  ArraySelect(arr, ind),
+                  AnyRefType,
+                  transform(e.getType, env),
+                  env ),
+                transform(s.Error(e.getType, "Error: Array out of bounds"), env) )))
         } else {
           maybeUnbox(
             ArraySelect(transform(array, env), transform(index, env)),
@@ -470,7 +460,7 @@ private [wasmgen] class ExprLowerer(
           elements.foldLeft[s.Expr](s.FiniteSet(Seq(), base)){ (rest, elem) =>
             s.SetAdd(rest, elem)
           },
-          env)
+          env )
       case s.SetAdd(set, elem) =>
         FunctionInvocation(
           fun("_setAdd_").id, Seq(),
@@ -573,16 +563,13 @@ private [wasmgen] class ExprLowerer(
           Seq(transform(map, env), maybeBox(key, AnyRefType, env), maybeBox(value, AnyRefType, env))
         )
 
-      case s.Annotated(body, _) =>
-        transform(body, env)
-
       // We do not translate these for now
       case s.Forall(_, _)
          | s.Choose(_, _)
          | s.GenericValue(_, _) =>
         context.reporter.fatalError(
           s"Cannot translate expression " +
-          e.asString(s.PrinterOptions.fromContext(context, Some(env._1))) +
+          e.asString(s.PrinterOptions.fromContext(context, Some(env.syms))) +
           " to WebAssembly."
         )
 
@@ -697,11 +684,11 @@ class Lowering(context: Context) extends inox.transformers.SymbolTransformer wit
 
     // (1) Transform sorts, make them to starting symbols
     val manager = new SymbolsManager
-    val env0 = (syms, manager)
+    val env0 = Env(syms, manager, generateChecks = true)
     val initSymbols = t.NoSymbols.withRecords(syms.sorts.values.toSeq.flatMap(transform(_, env0)))
 
     // (2) Transform functions in program
-    val tr = new ExprLowerer(manager, keepContracts = true, syms, initSymbols.records, context)
+    val tr = new ExprLowerer(manager, syms, initSymbols.records, context)
     val funs = (syms.functions mapValues tr.transform).view.force
 
     // (3) Put it all together
@@ -710,7 +697,7 @@ class Lowering(context: Context) extends inox.transformers.SymbolTransformer wit
       funs ++ manager.functions
     )
 
-    // (4) Simplify function bodies
+    // (4) Simplify function bodies (mainly to eliminate excessive variable definitions...)
     val simplifier = ret0.simplifier(inox.solvers.PurityOptions(context))
     val ret = t.Symbols(
       ret0.records,
@@ -720,6 +707,8 @@ class Lowering(context: Context) extends inox.transformers.SymbolTransformer wit
     )
 
     //Debugging
+    //implicit val printerOptions0 = s.PrinterOptions(printUniqueIds = true)
+    //syms0.functions foreach (r => println(r._2.asString))
     //implicit val printerOptions = t.PrinterOptions(printUniqueIds = true)
     //ret.records foreach (r => println(r._2.asString))
     //ret.functions foreach (r => println(r._2.asString))
