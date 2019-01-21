@@ -6,7 +6,7 @@ package intermediate
 import inox.Context
 import stainless.{FreshIdentifier, Identifier}
 
-trait Transformer extends stainless.transformers.Transformer {
+trait Lowerer extends stainless.transformers.Transformer {
   val s = stainless.trees
   val t = trees
 
@@ -97,13 +97,13 @@ private[wasmgen] class SymbolsManager {
 }
 
 
-private [wasmgen] class ExprTransformer (
+private [wasmgen] class ExprLowerer(
   manager: SymbolsManager,
   keepContracts: Boolean,
   sym0: stainless.trees.Symbols,
   initSorts: Map[Identifier, trees.RecordSort],
   context: Context
-) extends Transformer {
+) extends Lowerer {
   import t._
   def initEnv = (sym0, manager)
 
@@ -152,16 +152,61 @@ private [wasmgen] class ExprTransformer (
 
   override def transform(e: s.Expr, env: Env): Expr = {
     implicit val impSyms = env._1
+
+    def transformSelector(as: s.ADTSelector, checkConstructor: Boolean) = {
+      val s.ADTSelector(adt, selector) = as
+      val s.ADTType(parent, tps) = adt.getType
+      val (childId, formalType) = (for {
+        ch <- initSorts.values
+        if ch.parent.contains(parent)
+        fd <- ch.fields
+        if fd.id == selector
+      } yield (ch.id, fd.tpe)).head
+      if (checkConstructor) {
+        val binder = ValDef(FreshIdentifier(childId.name.toLowerCase), RecordType(parent))
+        Let(binder, transform(adt, env),
+          IfExpr(
+            Equals(
+              RecordSelector(binder.toVariable, typeTagID),
+              Int32Literal(initSorts(childId).asInstanceOf[ConstructorSort].typeTag)
+            ),
+            maybeUnbox(
+              RecordSelector(
+                CastDown(binder.toVariable, RecordType(childId)),
+                selector
+              ),
+              formalType,
+              transform(as.getType, env),
+              env
+            ),
+            transform(s.Error(as.getType, s"Cannot cast to ${childId.name}"), env) ) )
+      } else {
+        maybeUnbox(
+          RecordSelector(
+            CastDown(transform(adt, env), RecordType(childId)),
+            selector
+          ),
+          formalType,
+          transform(as.getType, env),
+          env
+        )
+      }
+    }
+
+    def inBounds(array: t.Expr, index: t.Expr) = {
+      And(
+        GreaterEquals(index, Int32Literal(0)),
+        LessThan(index, ArrayLength(array))
+      )
+    }
+
     e match {
       // Misc.
-      case s.Annotated(body, flags) =>
-        transform(body, env)
       case s.Error(tpe, description) =>
         Sequence(Seq(
           Output(transform(s.StringLiteral(description), env)),
           NoTree(transform(tpe, env))
         ))
-      case me: s.MatchExpr => transform(impSyms.matchToIfThenElse(me), env)
 
       // Contracts
       case s.Assume(pred, body) =>
@@ -200,7 +245,7 @@ private [wasmgen] class ExprTransformer (
             vCallee +: args.map( arg => maybeBox(arg, AnyRefType, env))
           ), AnyRefType, transform(e.getType, env), env)
         )
-      case lmd@s.Lambda(params, body) =>
+      case s.Lambda(params, body) =>
         val boxedFunType = FunctionType(
           Seq.fill(params.size)(AnyRefType),
           AnyRefType
@@ -275,17 +320,41 @@ private [wasmgen] class ExprTransformer (
       case s.Implies(lhs, rhs) => transform(s.Or(lhs, s.Not(rhs)), env)
 
       // ADTs
-      case s.ADT(id, tps, args) =>
+      case me: s.MatchExpr =>
+        // We get hacky here: We annotate all selectors that are not going to be generated
+        // by this matchToIfThenElse with Unchecked, so later we can recover that we have to insert safety checks for them
+        val annotatedME = s.exprOps.preMap{
+          case sel: s.ADTSelector => Some(s.Annotated(sel, Seq(s.Unchecked)))
+          case _ => None
+        }(me)
+        val ite = impSyms.matchToIfThenElse(annotatedME, assumeExhaustive = false)
+        transform(ite, env)
+      case adt@s.ADT(id, tps, args) =>
         // Except constructor fields, we also store the i32 tag corresponding to this constructor
         val typeTag = initSorts(id).asInstanceOf[ConstructorSort].typeTag
         val formals = sym0.constructors(id).fields.map(_.getType)
         val tpe = RecordType(id)
-        CastUp(
+        val parentType = RecordType(sym0.constructors(id).sort)
+        val invariant = adt.getConstructor.sort.invariant
+        val withoutInv = CastUp(
           Record(tpe, Int32Literal(typeTag) +: args.zip(formals).map {
             case (arg, formal) => maybeBox(arg, transform(formal, env), env)
           }),
-          RecordType(sym0.constructors(id).sort)
+          parentType
         )
+        invariant match {
+          case Some(inv) if keepContracts =>
+            val binder = ValDef(FreshIdentifier(id.name.toLowerCase), parentType)
+            Let(
+              binder, withoutInv,
+              IfExpr(
+                FunctionInvocation(inv.id, Seq(), Seq(binder.toVariable)),
+                binder.toVariable,
+                transform(s.Error(adt.getType, s"Invariant failed for ${adt.getConstructor.sort.id}"), env))
+            )
+          case _ =>
+            withoutInv
+        }
       case s.IsConstructor(expr, id) =>
         // We need to compare the constructor code of given value
         // to the code corresponding to constructor 'id'
@@ -293,23 +362,12 @@ private [wasmgen] class ExprTransformer (
           RecordSelector(transform(expr, env), typeTagID),
           Int32Literal(initSorts(id).asInstanceOf[ConstructorSort].typeTag)
         )
+      // We have to insert safety check if:
+      // the selector was not generated by a matchToIfThenElse AND keepContracts is true
+      case s.Annotated(as@s.ADTSelector(adt, selector), flags) if flags contains s.Unchecked =>
+        transformSelector(as, checkConstructor = keepContracts)
       case as@s.ADTSelector(adt, selector) =>
-        val s.ADTType(parent, tps) = adt.getType
-        val (childId, formalType) = (for {
-          ch <- initSorts.values
-          if ch.parent.contains(parent)
-          fd <- ch.fields
-          if fd.id == selector
-        } yield (ch.id, fd.tpe)).head
-        maybeUnbox(
-          RecordSelector(
-            CastDown(transform(adt, env), RecordType(childId)),
-            selector
-          ),
-          formalType,
-          transform(as.getType, env),
-          env
-        )
+        transformSelector(as, checkConstructor = false)
 
       case s.FunctionInvocation(id, tps, args) =>
         val formals = sym0.functions(id).params.map(_.getType)
@@ -344,18 +402,42 @@ private [wasmgen] class ExprTransformer (
       case s.ArrayUpdated(array, index, value) =>
         // TODO: Copy functional arrays or analyze when we don't need to do so
         val arr = Variable.fresh("array", ArrayType(AnyRefType))
-        Let(arr.toVal, transform(array, env),
-          Sequence(Seq(
-            ArraySet(arr, transform(index, env), maybeBox(value, AnyRefType, env)),
-            arr
-          ) ) )
+        if (keepContracts) {
+          val ind = Variable.fresh("index", Int32Type())
+          Let(arr.toVal, transform(array, env),
+            Let(ind.toVal, transform(index, env),
+              IfExpr(
+                inBounds(arr, ind),
+                Sequence(Seq(
+                  ArraySet(arr, ind, maybeBox(value, AnyRefType, env)),
+                  arr
+                )),
+                transform(s.Error(array.getType, "Array out of bounds"), env) )))
+        } else {
+          Let(arr.toVal, transform(array, env),
+            Sequence(Seq(
+              ArraySet(arr, transform(index, env), maybeBox(value, AnyRefType, env)),
+              arr
+            )))
+        }
       case s.ArraySelect(array, index) =>
-        maybeUnbox(
-          ArraySelect(transform(array, env), transform(index, env)),
-          AnyRefType,
-          transform(e.getType, env),
-          env
-        )
+        if (keepContracts) {
+          val arr = Variable.fresh("array", ArrayType(AnyRefType))
+          val ind = Variable.fresh("index", Int32Type())
+          Let(arr.toVal, transform(array, env),
+            Let(ind.toVal, transform(index, env),
+              IfExpr(
+                inBounds(arr, ind),
+                ArraySelect(arr, ind),
+                transform(s.Error(array.getType, "Array out of bounds"), env) )))
+        } else {
+          maybeUnbox(
+            ArraySelect(transform(array, env), transform(index, env)),
+            AnyRefType,
+            transform(e.getType, env),
+            env
+          )
+        }
 
       // Tuples
       case s.Tuple(exprs) =>
@@ -491,6 +573,9 @@ private [wasmgen] class ExprTransformer (
           Seq(transform(map, env), maybeBox(key, AnyRefType, env), maybeBox(value, AnyRefType, env))
         )
 
+      case s.Annotated(body, _) =>
+        transform(body, env)
+
       // We do not translate these for now
       case s.Forall(_, _)
          | s.Choose(_, _)
@@ -549,7 +634,7 @@ private [wasmgen] class ExprTransformer (
   * - Reals are not translated (later are approximated as Doubles)
   * - ArrayUpdated does not copy, rather it does a destructive update
   */
-class Lowering(context: Context) extends inox.transformers.SymbolTransformer with Transformer {
+class Lowering(context: Context) extends inox.transformers.SymbolTransformer with Lowerer {
   private val sortCodes = new inox.utils.UniqueCounter[Unit]
   locally {
     // We want to reserve the first codes for native types
@@ -582,23 +667,26 @@ class Lowering(context: Context) extends inox.transformers.SymbolTransformer wit
         case Seq(arg) =>
           val fields = constr.typed(tps).fields
           val name = if (sort.id.name matches "_Tuple\\d{1,2}_") "" else constr.id.name
-          if (fields.isEmpty) StringLiteral(name + "()")
-          else (
-            StringLiteral(name + "(") +:
-            fields.zipWithIndex.flatMap { case (f, ind) =>
-              val fieldStr = FunctionInvocation(fun("_toString_").id, Seq(f.getType), Seq(ADTSelector(arg, f.id)))
-              if (ind == fields.size - 1) Seq(fieldStr)
-              else Seq(fieldStr, StringLiteral(", "))
-            } :+
-            StringLiteral(")")
-          ).reduceLeft(StringConcat)
+          Require(
+            IsConstructor(arg, constr.id),
+            if (fields.isEmpty) StringLiteral(name + "()")
+            else (
+              StringLiteral(name + "(") +:
+              fields.zipWithIndex.flatMap { case (f, ind) =>
+                val fieldStr = FunctionInvocation(fun("_toString_").id, Seq(f.getType), Seq(ADTSelector(arg, f.id)))
+                if (ind == fields.size - 1) Seq(fieldStr)
+                else Seq(fieldStr, StringLiteral(", "))
+              } :+
+              StringLiteral(")")
+            ).reduceLeft(StringConcat)
+          )
       })
     }
   }
 
   def transform(syms0: s.Symbols): t.Symbols = {
 
-    // (0) Make toString's and inject assertions
+    // (0) Make toString's
     val toStrings = {
       val hasBuiltinToString = Set("_SCons_", "_SNil_", "_MCons_", "_MNil_", "_BCons_", "_BNil_")
       syms0.sorts.toSeq.flatMap(_._2.constructors).filterNot( constr =>
@@ -613,13 +701,22 @@ class Lowering(context: Context) extends inox.transformers.SymbolTransformer wit
     val initSymbols = t.NoSymbols.withRecords(syms.sorts.values.toSeq.flatMap(transform(_, env0)))
 
     // (2) Transform functions in program
-    val tr = new ExprTransformer(manager, keepContracts = true, syms, initSymbols.records, context)
+    val tr = new ExprLowerer(manager, keepContracts = true, syms, initSymbols.records, context)
     val funs = (syms.functions mapValues tr.transform).view.force
 
     // (3) Put it all together
-    val ret = t.Symbols(
+    val ret0 = t.Symbols(
       initSymbols.records ++ manager.records + (t.AnyRefSort.id -> t.AnyRefSort),
       funs ++ manager.functions
+    )
+
+    // (4) Simplify function bodies
+    val simplifier = ret0.simplifier(inox.solvers.PurityOptions(context))
+    val ret = t.Symbols(
+      ret0.records,
+      ret0.functions.mapValues{ fd =>
+        fd.copy(fullBody = simplifier.transform(fd.fullBody, simplifier.initEnv))
+      }.view.force
     )
 
     //Debugging

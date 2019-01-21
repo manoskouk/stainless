@@ -434,23 +434,7 @@ object LinearMemoryCodeGen extends CodeGeneration {
   }
 
   protected def mkCastDown(expr: Expr, subType: t.RecordType)(implicit env: Env): Expr = {
-    implicit val lh = env.lh
-    implicit val s = env.s
-    val temp = lh.getFreshLocal(freshLabel("cast"), i32)
-    subType.getRecord match {
-      case cs: t.ConstructorSort =>
-        Sequence(Seq(
-          SetLocal(temp, expr),
-          If(
-            freshLabel("label"),
-            EQ(Load(i32, None, GetLocal(temp)), I32Const(cs.typeTag)),
-            GetLocal(temp),
-            Unreachable
-          )
-        ))
-      // Our translation ensures by construction that we cannot fail when casting anything else
-      case _ => expr
-    }
+    expr
   }
 
   // Up-casts are trivial
