@@ -18,7 +18,9 @@ trait Printer extends stainless.ast.Printer {
 
     case CastUp(e, tp) => p"$e.asInstanceOf[$tp]"
 
-    case Sequence(Seq(one)) => p"$one"
+    case Sequence(Seq(e1, e2)) =>
+      p"""|$e1;
+          |$e2"""
 
     case Sequence(more) =>
       p"""|${more.head};

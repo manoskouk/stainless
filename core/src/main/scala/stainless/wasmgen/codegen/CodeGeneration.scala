@@ -90,7 +90,7 @@ trait CodeGeneration {
   }
   private def mkMain(s: t.Symbols, toExecute: Seq[Identifier])(implicit funEnv: FunEnv): FunDef = {
     FunDef("_main_", Seq(), void) { lh =>
-      transform(t.Sequence(
+      transform(t.sequence(
         toExecute map { fid =>
           t.Output(t.StringConcat(
             t.StringLiteral(s"${fid.name} = "),

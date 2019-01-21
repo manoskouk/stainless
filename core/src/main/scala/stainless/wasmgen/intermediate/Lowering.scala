@@ -373,7 +373,7 @@ private [wasmgen] class ExprLowerer(
         val arr = Variable.fresh("array", ArrayType(AnyRefType))
         Let(arr.toVal,
           NewArray(Int32Literal(elems.length), None),
-          Sequence(elems.zipWithIndex.map { case (elem, index) =>
+          sequence(elems.zipWithIndex.map { case (elem, index) =>
             ArraySet(arr, Int32Literal(index), maybeBox(elem, AnyRefType, env))
           } :+ arr)
         )
@@ -381,7 +381,7 @@ private [wasmgen] class ExprLowerer(
         val arr = Variable.fresh("array", ArrayType(AnyRefType))
         Let(arr.toVal,
           NewArray(transform(size, env), Some(maybeBox(default, AnyRefType, env))),
-          Sequence( elems.toSeq.sortBy(_._1).map { case (index, elem) =>
+          sequence( elems.toSeq.sortBy(_._1).map { case (index, elem) =>
             ArraySet(arr, Int32Literal(index), maybeBox(elem, AnyRefType, env))
           } :+ arr)
         )

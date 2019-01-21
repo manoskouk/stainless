@@ -71,9 +71,11 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
-  /** Execute all expressions in 'es' one after the other. All but the last have to be unit */
+  /** Execute all expressions in 'es' one after the other. All but the last have to be of UnitType.
+    * If you are not sure that the requirement holds use [[Constructors.sequence]]
+    */
   sealed case class Sequence(es: Seq[Expr]) extends Expr {
-    require(es.nonEmpty)
+    require(es.size >= 2)
     def getType(implicit s: Symbols) = {
       checkParamTypes(es.init, List.fill(es.size - 1)(UnitType()), es.last.getType)
     }
