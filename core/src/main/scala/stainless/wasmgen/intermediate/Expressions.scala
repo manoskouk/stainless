@@ -65,7 +65,7 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
   sealed case class Output(msg: Expr) extends Expr {
     def getType(implicit s: Symbols) = {
       msg.getType match {
-        case ArrayType(Int32Type()) => UnitType()
+        case StringType() => UnitType()
         case _ => Untyped
       }
     }
