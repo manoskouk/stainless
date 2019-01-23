@@ -7,7 +7,8 @@ import inox.ast.Identifier
 trait Expressions extends stainless.ast.Expressions { self: Trees =>
 
   /** Represents a value of a record type at runtime.
-    * Has to be passed arguments for all fields, including the types ancestors.
+    * Has to be passed arguments for all fields,
+    * including those defined in ``tpe``s ancestors.
     */
   sealed case class Record(tpe: RecordType, fields: Seq[Expr]) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = {
@@ -52,7 +53,7 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
   }
 
   /** Cast an expression to a type higher in its type hierarchy.
-    * This will never fail at runtime.
+    * This will never fail at runtime (if it is well-typed).
     */
   sealed case class CastUp(e: Expr, supertype: RecordType) extends Expr with CachingTyped {
     protected def computeType(implicit s: Symbols): Type = e.getType match {
@@ -61,7 +62,7 @@ trait Expressions extends stainless.ast.Expressions { self: Trees =>
     }
   }
 
-  /** Print a message to the standard output */
+  /** Print a message to the output */
   sealed case class Output(msg: Expr) extends Expr {
     def getType(implicit s: Symbols) = {
       msg.getType match {

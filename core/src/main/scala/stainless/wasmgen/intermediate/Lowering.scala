@@ -610,11 +610,9 @@ private [wasmgen] class ExprLowerer(
   *
   * The following changes take place:
   * - Arrays become mutable
-  * - Chars, Booleans and Unit become i32
-  * - BigInts become i64 (Currently, will be fixed in the future) (this is done later in the pipeline)
-  * - Composite types become records. Records are extensible structs in memory. See [[Definitions.RecordSort]]
+  * - Composite types become "records", which are extensible structs in memory. See [[Definitions.RecordSort]]
   * - Polymorphic types are erased and polymorphic values are boxed.
-  * - Maps, Bags and Sets become records based on a library implemented in stainless (TODO)
+  * - Maps, Bags and Sets become records based on a library implemented in stainless
   *
   * Limitations:
   * - BigInts are approximated by Longs
@@ -654,19 +652,19 @@ class Lowering(context: Context) extends inox.transformers.SymbolTransformer wit
         case Seq(arg) =>
           val fields = constr.typed(tps).fields
           val name = if (sort.id.name matches "_Tuple\\d{1,2}_") "" else constr.id.name
-          Require(
-            IsConstructor(arg, constr.id),
-            if (fields.isEmpty) StringLiteral(name + "()")
-            else (
-              StringLiteral(name + "(") +:
-              fields.zipWithIndex.flatMap { case (f, ind) =>
-                val fieldStr = FunctionInvocation(fun("_toString_").id, Seq(f.getType), Seq(ADTSelector(arg, f.id)))
-                if (ind == fields.size - 1) Seq(fieldStr)
-                else Seq(fieldStr, StringLiteral(", "))
-              } :+
-              StringLiteral(")")
-            ).reduceLeft(StringConcat)
-          )
+          if (fields.isEmpty) StringLiteral(name + "()")
+          else (
+            StringLiteral(name + "(") +:
+            fields.zipWithIndex.flatMap { case (f, ind) =>
+              val fieldStr = FunctionInvocation(
+                fun("_toString_").id,
+                Seq(f.getType),
+                Seq(Annotated(ADTSelector(arg, f.id), Seq(Unchecked))))
+              if (ind == fields.size - 1) Seq(fieldStr)
+              else Seq(fieldStr, StringLiteral(", "))
+            } :+
+            StringLiteral(")")
+          ).reduceLeft(StringConcat)
       })
     }
   }
